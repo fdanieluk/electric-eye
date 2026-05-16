@@ -7,6 +7,7 @@ import click
 from dotenv import load_dotenv
 
 from electric_eye.blinds import BlindsClient
+from electric_eye.config import load_devices, load_groups
 
 load_dotenv()
 
@@ -64,23 +65,15 @@ def resolve_device_id(client: BlindsClient, name_or_id: str) -> str:
     sys.exit(1)
 
 
-def parse_room(device_name: str) -> str:
-    """Extract room name from device name (e.g. 'Salon - Kominek lewo (10)' -> 'salon')."""
-    return device_name.split(" - ")[0].strip().lower()
-
-
-def resolve_room_device_ids(client: BlindsClient, room: str) -> list[str]:
-    """Find all device IDs belonging to a room (matched by name prefix)."""
-    devices = get_all_devices(client)
-    room_lower = room.lower()
-    ids = [str(d["id"]) for d in devices if parse_room(d["name"]) == room_lower]
-    if not ids:
-        available = sorted(set(parse_room(d["name"]) for d in devices))
-        click.echo(f"Room '{room}' not found. Available rooms:", err=True)
-        for r in available:
-            click.echo(f"  - {r}", err=True)
-        sys.exit(1)
-    return ids
+def resolve_group(name: str) -> list[str]:
+    """Look up a group name in devices.toml, exit with available groups if not found."""
+    groups = load_groups()
+    if name in groups:
+        return groups[name]
+    click.echo(f"Group '{name}' not found. Available groups:", err=True)
+    for g in groups:
+        click.echo(f"  - {g}", err=True)
+    sys.exit(1)
 
 
 @click.group()
@@ -107,17 +100,14 @@ def blinds_list():
 
 @blinds.command("rooms")
 def blinds_rooms():
-    """List all rooms and their devices."""
-    client = get_blinds_client()
-    devices = get_all_devices(client)
-    rooms: dict[str, list[dict]] = {}
-    for d in devices:
-        room = parse_room(d["name"])
-        rooms.setdefault(room, []).append(d)
-    for room, devs in sorted(rooms.items()):
-        click.echo(f"{room}:")
-        for d in devs:
-            click.echo(f"  [{d['id']:>2}] {d['name']}")
+    """List all groups from devices.toml."""
+    groups = load_groups()
+    device_names = load_devices()
+    for group, ids in groups.items():
+        click.echo(f"{group}:")
+        for did in ids:
+            name = device_names.get(did, "?")
+            click.echo(f"  [{int(did):>2}] {name}")
         click.echo()
 
 
@@ -177,9 +167,9 @@ def set_position(device, percent):
 @blinds.command("room-up")
 @click.argument("room")
 def room_up(room):
-    """Open all blinds in a room (single connection)."""
+    """Open all blinds in a group (single connection)."""
+    ids = resolve_group(room)
     client = get_blinds_client()
-    ids = resolve_room_device_ids(client, room)
     click.echo(f"Opening {len(ids)} device(s) in '{room}'...")
     data = client.control_many(ids, "UP")
     click.echo(json.dumps(data, indent=2))
@@ -188,9 +178,9 @@ def room_up(room):
 @blinds.command("room-down")
 @click.argument("room")
 def room_down(room):
-    """Close all blinds in a room (single connection)."""
+    """Close all blinds in a group (single connection)."""
+    ids = resolve_group(room)
     client = get_blinds_client()
-    ids = resolve_room_device_ids(client, room)
     click.echo(f"Closing {len(ids)} device(s) in '{room}'...")
     data = client.control_many(ids, "DOWN")
     click.echo(json.dumps(data, indent=2))
@@ -199,9 +189,9 @@ def room_down(room):
 @blinds.command("room-stop")
 @click.argument("room")
 def room_stop(room):
-    """Stop all blinds in a room."""
+    """Stop all blinds in a group."""
+    ids = resolve_group(room)
     client = get_blinds_client()
-    ids = resolve_room_device_ids(client, room)
     click.echo(f"Stopping {len(ids)} device(s) in '{room}'...")
     data = client.control_many(ids, "STOP")
     click.echo(json.dumps(data, indent=2))
@@ -211,13 +201,13 @@ def room_stop(room):
 @click.argument("room")
 @click.argument("percent", type=int)
 def room_set(room, percent):
-    """Set all blinds in a room to a position (0-100%)."""
+    """Set all blinds in a group to a position (0-100%)."""
     if not 0 <= percent <= 100:
         click.echo("Percent must be 0-100.", err=True)
         sys.exit(1)
 
+    ids = resolve_group(room)
     client = get_blinds_client()
-    ids = resolve_room_device_ids(client, room)
     click.echo(f"Setting {len(ids)} device(s) in '{room}' to {percent}%...")
     data = client.control_many(ids, f"{percent}%")
     click.echo(json.dumps(data, indent=2))
@@ -226,9 +216,8 @@ def room_set(room, percent):
 @blinds.command("all-up")
 def all_up():
     """Open all blinds in the house (single connection)."""
+    ids = list(load_devices().keys())
     client = get_blinds_client()
-    devices = get_all_devices(client)
-    ids = [str(d["id"]) for d in devices]
     click.echo(f"Opening all {len(ids)} device(s)...")
     data = client.control_many(ids, "UP")
     click.echo(json.dumps(data, indent=2))
@@ -237,9 +226,8 @@ def all_up():
 @blinds.command("all-down")
 def all_down():
     """Close all blinds in the house (single connection)."""
+    ids = list(load_devices().keys())
     client = get_blinds_client()
-    devices = get_all_devices(client)
-    ids = [str(d["id"]) for d in devices]
     click.echo(f"Closing all {len(ids)} device(s)...")
     data = client.control_many(ids, "DOWN")
     click.echo(json.dumps(data, indent=2))
