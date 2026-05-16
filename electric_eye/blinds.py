@@ -50,3 +50,11 @@ class BlindsClient:
         commands = [("call_events", {"device_id": did, "value": value}) for did in device_ids]
         log.debug("Batching %d commands in one connection", len(commands))
         return self._call(commands)
+
+    def control_many_varied(self, commands: list[tuple[str, str]]) -> list[dict]:
+        """Send different values to different devices in one connection.
+        commands: [(device_id, value), ...]
+        """
+        calls = [("call_events", {"device_id": did, "value": val}) for did, val in commands]
+        log.debug("Batching %d varied commands in one connection", len(calls))
+        return self._call(calls)
