@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>electric-eye</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f1115;
+    --fg: #e8e8ea;
+    --muted: #8b8d94;
+    --card: #181b22;
+    --border: #2a2e38;
+    --accent: #4f8cff;
+    --ok: #2fb344;
+    --err: #ff5c5c;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f7f7f9; --fg:#1a1a1c; --muted:#6b6f78; --card:#fff; --border:#e2e4ea; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    padding: 1rem;
+    max-width: 900px;
+    margin-inline: auto;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+  .device {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: .75rem 1rem;
+    margin-bottom: .5rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: .5rem 1rem;
+    align-items: center;
+  }
+  .device.busy { opacity: .55; }
+  .device.flash-ok { box-shadow: 0 0 0 2px var(--ok) inset; }
+  .device.flash-err { box-shadow: 0 0 0 2px var(--err) inset; }
+  .name { font-weight: 500; }
+  .id { color: var(--muted); font-size: .8rem; margin-left: .4rem; }
+  .controls { display: flex; gap: .4rem; flex-wrap: wrap; }
+  button {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .4rem .7rem;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { cursor: not-allowed; opacity: .5; }
+  .slider-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+  }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .pct { width: 3ch; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .empty, .error { color: var(--muted); padding: 1rem; }
+  .error { color: var(--err); }
+</style>
+</head>
+<body>
+<h1>electric-eye · blinds</h1>
+<div id="list" class="empty">Loading...</div>
+
+<script>
+const list = document.getElementById("list");
+
+async function loadDevices() {
+  try {
+    const res = await fetch("/api/devices");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const devices = await res.json();
+    renderDevices(devices);
+  } catch (e) {
+    list.className = "error";
+    list.textContent = `Failed to load devices: ${e.message}`;
+  }
+}
+
+function renderDevices(devices) {
+  list.className = "";
+  list.innerHTML = "";
+  for (const d of devices) {
+    const row = document.createElement("div");
+    row.className = "device";
+    row.dataset.id = d.id;
+    row.innerHTML = `
+      <div>
+        <span class="name">${escapeHtml(d.name)}</span>
+        <span class="id">#${d.id}</span>
+      </div>
+      <div class="controls">
+        <button data-action="up">UP</button>
+        <button data-action="stop">STOP</button>
+        <button data-action="down">DOWN</button>
+      </div>
+      <div class="slider-row">
+        <input type="range" min="0" max="100" value="50">
+        <span class="pct">50</span>
+        <button data-action="set">Set</button>
+      </div>
+    `;
+    const slider = row.querySelector("input[type=range]");
+    const pct = row.querySelector(".pct");
+    slider.addEventListener("input", () => pct.textContent = slider.value);
+    row.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => onAction(row, d.id, btn.dataset.action, slider.value));
+    });
+    list.appendChild(row);
+  }
+}
+
+async function onAction(row, id, action, percent) {
+  row.classList.add("busy");
+  row.querySelectorAll("button").forEach(b => b.disabled = true);
+  try {
+    let url = `/api/devices/${id}/${action}`;
+    let opts = { method: "POST" };
+    if (action === "set") {
+      opts.headers = { "Content-Type": "application/json" };
+      opts.body = JSON.stringify({ percent: Number(percent) });
+    }
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    flash(row, "ok");
+  } catch (e) {
+    console.error(e);
+    flash(row, "err");
+  } finally {
+    row.classList.remove("busy");
+    row.querySelectorAll("button").forEach(b => b.disabled = false);
+  }
+}
+
+function flash(row, kind) {
+  const cls = `flash-${kind}`;
+  row.classList.add(cls);
+  setTimeout(() => row.classList.remove(cls), 800);
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+loadDevices();
+</script>
+</body>
+</html>
