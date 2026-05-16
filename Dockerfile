@@ -9,6 +9,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN uv sync --no-install-project
 
+COPY devices.toml ./
 COPY electric_eye ./electric_eye
 RUN uv sync
 
