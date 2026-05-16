@@ -15,6 +15,7 @@
     --accent: #4f8cff;
     --ok: #2fb344;
     --err: #ff5c5c;
+    --warn: #e8a820;
   }
   @media (prefers-color-scheme: light) {
     :root { --bg:#f7f7f9; --fg:#1a1a1c; --muted:#6b6f78; --card:#fff; --border:#e2e4ea; }
@@ -45,9 +46,25 @@
   .card.busy { opacity: .55; }
   .card.flash-ok { box-shadow: 0 0 0 2px var(--ok) inset; }
   .card.flash-err { box-shadow: 0 0 0 2px var(--err) inset; }
+  .card.warn { box-shadow: 0 0 0 2px var(--warn) inset; }
   .name { font-weight: 500; }
   .count { color: var(--muted); font-size: .8rem; margin-left: .4rem; }
   .id { color: var(--muted); font-size: .8rem; margin-left: .4rem; }
+  .type-badge {
+    display: inline-block;
+    font-size: .65rem;
+    padding: .1rem .4rem;
+    border-radius: 4px;
+    background: var(--border);
+    color: var(--muted);
+    margin-left: .4rem;
+    vertical-align: middle;
+  }
+  .warn-text {
+    grid-column: 1 / -1;
+    font-size: .75rem;
+    color: var(--warn);
+  }
   .controls { display: flex; gap: .4rem; flex-wrap: wrap; }
   button {
     background: var(--bg);
@@ -97,17 +114,22 @@
 const app = document.getElementById("app");
 let groupsData = {};
 let devicesData = [];
+let stateData = {};
+
+const TYPE_LABELS = { 1: "roller", 3: "roller", 7: "tilt blind" };
 
 async function init() {
   try {
-    const [gRes, dRes] = await Promise.all([
+    const [gRes, dRes, sRes] = await Promise.all([
       fetch("/api/groups"),
       fetch("/api/devices"),
+      fetch("/api/state"),
     ]);
     if (!gRes.ok) throw new Error(`groups: HTTP ${gRes.status}`);
     if (!dRes.ok) throw new Error(`devices: HTTP ${dRes.status}`);
     groupsData = await gRes.json();
     devicesData = await dRes.json();
+    if (sRes.ok) stateData = await sRes.json();
     render();
   } catch (e) {
     app.className = "error";
@@ -115,14 +137,27 @@ async function init() {
   }
 }
 
+function parsePercent(value) {
+  if (!value) return null;
+  const m = value.match(/^(\d+)%$/);
+  return m ? Number(m[1]) : null;
+}
+
+function apiToSlider(apiPercent) {
+  // API: 100% = fully open (up), 0% = fully closed (down)
+  // Slider: 0 = open (up), 100 = closed (down)
+  return 100 - apiPercent;
+}
+
 function render() {
   app.className = "";
   app.innerHTML = "";
 
-  // Build device name lookup
   const deviceNames = {};
+  const deviceTypes = {};
   for (const d of devicesData) {
     deviceNames[String(d.id)] = d.name;
+    deviceTypes[String(d.id)] = d.type;
   }
 
   // Separate floors from rooms
@@ -140,7 +175,7 @@ function render() {
     h.textContent = "Floors";
     app.appendChild(h);
     for (const [name, ids] of Object.entries(floorGroups)) {
-      app.appendChild(makeGroupCard(name, ids, deviceNames));
+      app.appendChild(makeGroupCard(name, ids, deviceNames, deviceTypes));
     }
   }
 
@@ -149,7 +184,7 @@ function render() {
   h.textContent = "Rooms";
   app.appendChild(h);
   for (const [name, ids] of Object.entries(roomGroups)) {
-    app.appendChild(makeGroupCard(name, ids, deviceNames));
+    app.appendChild(makeGroupCard(name, ids, deviceNames, deviceTypes));
   }
 
   // Devices section (collapsible)
@@ -170,11 +205,20 @@ function render() {
   }
 }
 
-function makeGroupCard(name, ids, deviceNames) {
+function groupSliderPosition(ids) {
+  const percents = ids.map(id => parsePercent((stateData[id] || {}).value)).filter(v => v !== null);
+  if (!percents.length) return 50;
+  const avg = Math.round(percents.reduce((a, b) => a + b, 0) / percents.length);
+  return apiToSlider(avg);
+}
+
+function makeGroupCard(name, ids, deviceNames, deviceTypes) {
   const card = document.createElement("div");
   card.className = "card";
+  card.dataset.group = name;
   const label = name.replace(/-/g, " ");
   const tooltip = ids.map(id => deviceNames[id] || `#${id}`).join("\n");
+  const sliderVal = groupSliderPosition(ids);
   card.innerHTML = `
     <div>
       <span class="name">${escapeHtml(label)}</span>
@@ -186,8 +230,8 @@ function makeGroupCard(name, ids, deviceNames) {
       <button data-action="down">DOWN</button>
     </div>
     <div class="slider-row">
-      <input type="range" min="0" max="100" value="50">
-      <span class="pct">50%</span>
+      <input type="range" min="0" max="100" value="${sliderVal}">
+      <span class="pct">${sliderVal}%</span>
       <button data-action="set">Set</button>
     </div>
   `;
@@ -195,7 +239,7 @@ function makeGroupCard(name, ids, deviceNames) {
   const pct = card.querySelector(".pct");
   slider.addEventListener("input", () => pct.textContent = slider.value + "%");
   card.querySelectorAll("button").forEach(btn => {
-    btn.addEventListener("click", () => onGroupAction(card, name, btn.dataset.action, slider.value));
+    btn.addEventListener("click", () => onGroupAction(card, name, ids, btn.dataset.action, slider.value));
   });
   return card;
 }
@@ -204,10 +248,14 @@ function makeDeviceCard(d) {
   const card = document.createElement("div");
   card.className = "card";
   card.dataset.id = d.id;
+  const typeLabel = TYPE_LABELS[d.type] || `type ${d.type}`;
+  const apiPct = parsePercent((stateData[String(d.id)] || {}).value);
+  const sliderVal = apiPct !== null ? apiToSlider(apiPct) : 50;
   card.innerHTML = `
     <div>
       <span class="name">${escapeHtml(d.name)}</span>
       <span class="id">#${d.id}</span>
+      <span class="type-badge">${escapeHtml(typeLabel)}</span>
     </div>
     <div class="controls">
       <button data-action="up">UP</button>
@@ -215,8 +263,8 @@ function makeDeviceCard(d) {
       <button data-action="down">DOWN</button>
     </div>
     <div class="slider-row">
-      <input type="range" min="0" max="100" value="50">
-      <span class="pct">50%</span>
+      <input type="range" min="0" max="100" value="${sliderVal}">
+      <span class="pct">${sliderVal}%</span>
       <button data-action="set">Set</button>
     </div>
   `;
@@ -229,7 +277,59 @@ function makeDeviceCard(d) {
   return card;
 }
 
-async function onGroupAction(card, name, action, percent) {
+async function pollState() {
+  try {
+    const res = await fetch("/api/state");
+    if (res.ok) stateData = await res.json();
+  } catch (e) { /* ignore */ }
+}
+
+function checkConfirmation(card, deviceIds, expectedAction, expectedPercent) {
+  setTimeout(async () => {
+    await pollState();
+    let mismatch = false;
+    if (expectedAction === "set") {
+      const expectedApi = 100 - Number(expectedPercent);
+      for (const id of deviceIds) {
+        const reported = parsePercent((stateData[String(id)] || {}).value);
+        if (reported !== null && Math.abs(reported - expectedApi) > 5) {
+          mismatch = true;
+          break;
+        }
+      }
+    }
+    // Update sliders to actual state
+    if (deviceIds.length === 1) {
+      const reported = parsePercent((stateData[String(deviceIds[0])] || {}).value);
+      if (reported !== null) {
+        const slider = card.querySelector("input[type=range]");
+        const pct = card.querySelector(".pct");
+        const sv = apiToSlider(reported);
+        slider.value = sv;
+        pct.textContent = sv + "%";
+      }
+    } else {
+      const sv = groupSliderPosition(deviceIds);
+      const slider = card.querySelector("input[type=range]");
+      const pct = card.querySelector(".pct");
+      slider.value = sv;
+      pct.textContent = sv + "%";
+    }
+    // Show warning if mismatch
+    card.querySelector(".warn-text")?.remove();
+    card.classList.remove("warn");
+    if (mismatch) {
+      card.classList.add("warn");
+      const w = document.createElement("div");
+      w.className = "warn-text";
+      w.textContent = "Position not confirmed — device may still be moving";
+      card.appendChild(w);
+      setTimeout(() => { card.classList.remove("warn"); w.remove(); }, 8000);
+    }
+  }, 4000);
+}
+
+async function onGroupAction(card, name, ids, action, percent) {
   setBusy(card, true);
   try {
     let url = `/api/groups/${encodeURIComponent(name)}/${action}`;
@@ -244,6 +344,7 @@ async function onGroupAction(card, name, action, percent) {
       throw new Error(body.detail || `HTTP ${res.status}`);
     }
     flash(card, "ok");
+    checkConfirmation(card, ids, action, percent);
   } catch (e) {
     console.error(e);
     flash(card, "err");
@@ -267,6 +368,7 @@ async function onDeviceAction(card, id, action, percent) {
       throw new Error(body.detail || `HTTP ${res.status}`);
     }
     flash(card, "ok");
+    checkConfirmation(card, [id], action, percent);
   } catch (e) {
     console.error(e);
     flash(card, "err");
