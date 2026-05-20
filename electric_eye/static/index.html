@@ -87,23 +87,28 @@
   .pct { width: 4ch; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
   .empty, .error { color: var(--muted); padding: 1rem; }
   .error { color: var(--err); }
-  .section-toggle {
+  .expand-btn {
     background: none;
     border: none;
     color: var(--accent);
     cursor: pointer;
-    font: inherit;
-    font-size: .95rem;
-    padding: 0;
-    margin: 1.5rem 0 .75rem;
-    display: flex;
+    font-size: .75rem;
+    padding: .2rem .4rem;
+    display: inline-flex;
     align-items: center;
-    gap: .4rem;
+    gap: .25rem;
   }
-  .section-toggle .arrow { transition: transform .2s; }
-  .section-toggle.open .arrow { transform: rotate(90deg); }
-  .devices-section { display: none; }
-  .devices-section.open { display: block; }
+  .expand-btn .arrow { transition: transform .2s; display: inline-block; }
+  .expand-btn.open .arrow { transform: rotate(90deg); }
+  .group-devices {
+    grid-column: 1 / -1;
+    display: none;
+    flex-direction: column;
+    gap: .5rem;
+    padding-top: .5rem;
+  }
+  .group-devices.open { display: flex; }
+  .group-devices .card { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -187,22 +192,6 @@ function render() {
     app.appendChild(makeGroupCard(name, ids, deviceNames, deviceTypes));
   }
 
-  // Devices section (collapsible)
-  const toggle = document.createElement("button");
-  toggle.className = "section-toggle";
-  toggle.innerHTML = '<span class="arrow">&#9654;</span> Individual devices';
-  const devSection = document.createElement("div");
-  devSection.className = "devices-section";
-  toggle.addEventListener("click", () => {
-    toggle.classList.toggle("open");
-    devSection.classList.toggle("open");
-  });
-  app.appendChild(toggle);
-  app.appendChild(devSection);
-
-  for (const d of devicesData) {
-    devSection.appendChild(makeDeviceCard(d));
-  }
 }
 
 function groupSliderPosition(ids) {
@@ -223,6 +212,7 @@ function makeGroupCard(name, ids, deviceNames, deviceTypes) {
     <div>
       <span class="name">${escapeHtml(label)}</span>
       <span class="count" title="${escapeHtml(tooltip)}">${ids.length} device${ids.length === 1 ? "" : "s"}</span>
+      <button class="expand-btn"><span class="arrow">&#9654;</span> devices</button>
     </div>
     <div class="controls">
       <button data-action="up">UP</button>
@@ -234,13 +224,31 @@ function makeGroupCard(name, ids, deviceNames, deviceTypes) {
       <span class="pct">${sliderVal}%</span>
       <button data-action="set">Set</button>
     </div>
+    <div class="group-devices"></div>
   `;
   const slider = card.querySelector("input[type=range]");
   const pct = card.querySelector(".pct");
   slider.addEventListener("input", () => pct.textContent = slider.value + "%");
-  card.querySelectorAll("button").forEach(btn => {
+  card.querySelectorAll(".controls button, .slider-row button").forEach(btn => {
     btn.addEventListener("click", () => onGroupAction(card, name, ids, btn.dataset.action, slider.value));
   });
+
+  // Expand/collapse to show individual devices
+  const expandBtn = card.querySelector(".expand-btn");
+  const devContainer = card.querySelector(".group-devices");
+  let devicesPopulated = false;
+  expandBtn.addEventListener("click", () => {
+    expandBtn.classList.toggle("open");
+    devContainer.classList.toggle("open");
+    if (!devicesPopulated) {
+      devicesPopulated = true;
+      for (const id of ids) {
+        const d = devicesData.find(dev => String(dev.id) === String(id));
+        if (d) devContainer.appendChild(makeDeviceCard(d));
+      }
+    }
+  });
+
   return card;
 }
 
