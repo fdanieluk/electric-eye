@@ -51,14 +51,3 @@ uv run ee web --host 0.0.0.0
 docker compose up -d
 ```
 
-## Project structure
-
-```
-electric_eye/
-  cli.py        # Click CLI entry point
-  web.py        # FastAPI app + JSON API
-  blinds.py     # BlindsClient wrapper around mobilus-client
-  config.py     # Env config
-  static/       # Single-page HTML/JS UI (no build step)
-```
-
