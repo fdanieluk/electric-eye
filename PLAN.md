@@ -97,7 +97,6 @@ Climate tab is already stubbed in the web UI — wire it up once backend is read
 - [x] GH Actions workflow (`build-push.yml`) — builds on PR, pushes to GHCR on merge/tag, `workflow_dispatch` for manual runs
 
 ### Todo
-- [ ] Merge `devops/ci-cd` PR and push `v1.0.0` tag to publish first image
+- [x] Merge `devops/ci-cd` PR and push `v1.0.0` tag to publish first image
 - [ ] Add `ruff` to dev dependencies and add lint step to the workflow
 - [ ] Decide on deployment automation (Watchtower vs webhook vs manual)
-- [ ] Choose home server to run the container on
