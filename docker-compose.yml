@@ -1,8 +1,10 @@
 services:
   web:
-    build: .
+    image: ghcr.io/fdanieluk/electric-eye:1.0.0
     container_name: electric-eye
     ports:
       - "8000:8000"
     env_file: .env
+    volumes:
+      - ./devices.toml:/app/devices.toml:ro
     restart: unless-stopped
