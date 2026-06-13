@@ -1,406 +1,850 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>electric-eye</title>
 <style>
+  /* ============================ tokens ============================ */
   :root {
-    color-scheme: light dark;
-    --bg: #0f1115;
-    --fg: #e8e8ea;
-    --muted: #8b8d94;
-    --card: #181b22;
-    --border: #2a2e38;
-    --accent: #4f8cff;
-    --ok: #2fb344;
-    --err: #ff5c5c;
-    --warn: #e8a820;
+    color-scheme: light;
+    --bg: oklch(0.975 0.006 150);
+    --surface: oklch(0.995 0.003 150);
+    --surface-2: oklch(0.955 0.008 150);
+    --fg: oklch(0.27 0.012 150);
+    --muted: oklch(0.52 0.012 150);
+    --faint: oklch(0.7 0.01 150);
+    --line: oklch(0.88 0.012 150);
+    --line-strong: oklch(0.8 0.014 150);
+    --accent: oklch(0.62 0.13 150);
+    --accent-ink: oklch(0.42 0.12 150);
+    --accent-soft: oklch(0.62 0.13 150 / 0.14);
+    --ok: oklch(0.62 0.13 150);
+    --err: oklch(0.62 0.17 25);
+    --warn: oklch(0.72 0.13 75);
+    --shadow: 0 1px 2px oklch(0.27 0.02 150 / 0.06), 0 6px 18px oklch(0.27 0.02 150 / 0.07);
+    --radius: 16px;
   }
-  @media (prefers-color-scheme: light) {
-    :root { --bg:#f7f7f9; --fg:#1a1a1c; --muted:#6b6f78; --card:#fff; --border:#e2e4ea; }
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(0.2 0.012 150);
+    --surface: oklch(0.245 0.014 150);
+    --surface-2: oklch(0.285 0.016 150);
+    --fg: oklch(0.93 0.01 150);
+    --muted: oklch(0.7 0.014 150);
+    --faint: oklch(0.55 0.014 150);
+    --line: oklch(0.34 0.016 150);
+    --line-strong: oklch(0.42 0.018 150);
+    --accent: oklch(0.72 0.13 150);
+    --accent-ink: oklch(0.82 0.11 150);
+    --accent-soft: oklch(0.72 0.13 150 / 0.18);
+    --shadow: 0 1px 2px oklch(0 0 0 / 0.2), 0 8px 22px oklch(0 0 0 / 0.28);
   }
+
   * { box-sizing: border-box; }
+  html, body { margin: 0; }
   body {
-    margin: 0;
-    font-family: -apple-system, system-ui, sans-serif;
     background: var(--bg);
     color: var(--fg);
-    padding: 1rem;
-    max-width: 900px;
-    margin-inline: auto;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: env(safe-area-inset-bottom);
   }
-  h1 { font-size: 1.4rem; margin: 0 0 1rem; }
-  h2 { font-size: 1.1rem; margin: 1.5rem 0 .75rem; color: var(--muted); }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: .75rem 1rem;
-    margin-bottom: .5rem;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: .5rem 1rem;
-    align-items: center;
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .wrap { max-width: 1040px; margin-inline: auto; padding: 0 clamp(0.8rem, 3vw, 1.6rem); }
+
+  /* ============================ header ============================ */
+  header.app {
+    position: sticky; top: 0; z-index: 30;
+    background: color-mix(in oklab, var(--bg) 86%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
   }
-  .card.busy { opacity: .55; }
-  .card.flash-ok { box-shadow: 0 0 0 2px var(--ok) inset; }
-  .card.flash-err { box-shadow: 0 0 0 2px var(--err) inset; }
-  .card.warn { box-shadow: 0 0 0 2px var(--warn) inset; }
-  .name { font-weight: 500; }
-  .count { color: var(--muted); font-size: .8rem; margin-left: .4rem; }
-  .id { color: var(--muted); font-size: .8rem; margin-left: .4rem; }
-  .type-badge {
-    display: inline-block;
-    font-size: .65rem;
-    padding: .1rem .4rem;
-    border-radius: 4px;
-    background: var(--border);
-    color: var(--muted);
-    margin-left: .4rem;
-    vertical-align: middle;
+  .head-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 0; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 650; font-size: 1.18rem; letter-spacing: 0.2px; }
+  .brand .name b { color: var(--accent-ink); font-weight: 750; }
+  .spacer { flex: 1; }
+
+  /* floppy bunny logo (circle head + accent eye + two ear capsules) */
+  .bunny { position: relative; width: 26px; height: 28px; flex: none; }
+  .bunny .head { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 19px; height: 19px; border: 2.4px solid var(--fg); border-radius: 50%; background: var(--surface); }
+  .bunny .head::after { content: ""; position: absolute; inset: 0; margin: auto;
+    width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  .bunny .ear { position: absolute; width: 6px; height: 17px; border: 2.2px solid var(--fg);
+    border-radius: 6px; background: var(--surface); }
+  .bunny .ear.l { left: 1px; top: 2px; transform: rotate(-62deg); transform-origin: bottom right; }
+  .bunny .ear.r { right: 1px; top: 2px; transform: rotate(62deg); transform-origin: bottom left; }
+  @media (prefers-reduced-motion: no-preference) {
+    .bunny .ear.l { animation: swayL 5.2s ease-in-out infinite; }
+    .bunny .ear.r { animation: swayR 5.6s ease-in-out infinite; }
+    @keyframes swayL { 0%,100% { transform: rotate(-62deg); } 50% { transform: rotate(-56deg); } }
+    @keyframes swayR { 0%,100% { transform: rotate(62deg); } 50% { transform: rotate(56deg); } }
   }
-  .warn-text {
-    grid-column: 1 / -1;
-    font-size: .75rem;
-    color: var(--warn);
+
+  .iconbtn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+    height: 38px; min-width: 38px; padding: 0 0.7rem;
+    border: 1px solid var(--line-strong); border-radius: 11px;
+    background: var(--surface); color: var(--fg); font: inherit; font-size: 0.9rem; cursor: pointer;
   }
-  .controls { display: flex; gap: .4rem; flex-wrap: wrap; }
-  button {
-    background: var(--bg);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: .4rem .7rem;
-    font: inherit;
-    cursor: pointer;
+  .iconbtn:hover { border-color: var(--accent); }
+  .conn { font-size: 0.74rem; color: var(--muted); display: inline-flex; align-items: center; gap: 0.4rem; }
+  .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .conn.demo .dot { background: var(--warn); }
+  .conn.err .dot { background: var(--err); }
+
+  /* filter chips */
+  .chips { display: flex; gap: 0.4rem; padding: 0 0 0.7rem; overflow-x: auto; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none; padding: 0.4rem 0.85rem; border-radius: 999px;
+    border: 1px solid var(--line-strong); background: var(--surface);
+    color: var(--muted); font: inherit; font-size: 0.88rem; cursor: pointer; white-space: nowrap;
   }
-  button:hover:not(:disabled) { border-color: var(--accent); }
-  button:disabled { cursor: not-allowed; opacity: .5; }
-  .slider-row {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    gap: .6rem;
+  .chip[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .chip:disabled { opacity: 0.55; cursor: not-allowed; }
+  .chip .soon { font-size: 0.66rem; color: var(--faint); margin-left: 0.25rem; }
+
+  /* ============================ layout ============================ */
+  main { padding: 1rem 0 3rem; }
+  .section-title { font-size: 0.78rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted);
+    margin: 1.4rem 0 0.6rem; font-weight: 650; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 0.8rem; }
+  @media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .card.busy { opacity: 0.6; pointer-events: none; }
+  .card.flash { box-shadow: 0 0 0 2px var(--ok) inset, var(--shadow); }
+  .card.flash-err { box-shadow: 0 0 0 2px var(--err) inset, var(--shadow); }
+
+  /* room card */
+  .room { padding: 0.9rem 1rem 1rem; }
+  .room-head { display: flex; align-items: flex-start; gap: 0.6rem; }
+  .room-name { font-size: 1.12rem; font-weight: 650; line-height: 1.1; }
+  .room-sub { font-size: 0.76rem; color: var(--muted); margin-top: 0.15rem; }
+  .room-head .spacer { flex: 1; }
+  .expand {
+    border: 1px solid var(--line-strong); background: var(--surface); border-radius: 9px;
+    height: 30px; padding: 0 0.55rem; font: inherit; font-size: 0.78rem; color: var(--muted);
+    cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;
   }
-  input[type=range] { flex: 1; accent-color: var(--accent); }
-  .pct { width: 4ch; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .empty, .error { color: var(--muted); padding: 1rem; }
-  .error { color: var(--err); }
-  .expand-btn {
-    background: none;
-    border: none;
-    color: var(--accent);
-    cursor: pointer;
-    font-size: .75rem;
-    padding: .2rem .4rem;
-    display: inline-flex;
-    align-items: center;
-    gap: .25rem;
+  .expand:hover { border-color: var(--accent); color: var(--fg); }
+  .expand .car { transition: transform 0.18s; }
+  .expand[aria-expanded="true"] .car { transform: rotate(90deg); }
+
+  .role { font-size: 0.66rem; letter-spacing: 0.7px; text-transform: uppercase; color: var(--faint); margin: 0.7rem 0 0.4rem; }
+
+  /* control buttons */
+  .ctl-row { display: flex; gap: 0.4rem; }
+  .btn {
+    flex: 1; height: 42px; border: 1px solid var(--line-strong); background: var(--surface);
+    border-radius: 11px; font: inherit; font-size: 0.92rem; color: var(--fg); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
   }
-  .expand-btn .arrow { transition: transform .2s; display: inline-block; }
-  .expand-btn.open .arrow { transform: rotate(90deg); }
-  .group-devices {
-    grid-column: 1 / -1;
-    display: none;
-    flex-direction: column;
-    gap: .5rem;
-    padding-top: .5rem;
-  }
-  .group-devices.open { display: flex; }
-  .group-devices .card { margin-bottom: 0; }
+  .btn:hover { border-color: var(--accent); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn .ar { font-size: 0.9em; }
+
+  /* slider */
+  .slider-row { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.7rem; }
+  input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; height: 26px; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 7px; border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent) var(--p,50%), var(--surface-2) var(--p,50%)); border: 1px solid var(--line); }
+  input[type=range]::-moz-range-track { height: 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); }
+  input[type=range]::-moz-range-progress { height: 7px; border-radius: 999px; background: var(--accent); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; margin-top: -8px;
+    border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); box-shadow: var(--shadow); }
+  input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); }
+  .pct { width: 4.5ch; text-align: right; font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ends { display: flex; justify-content: space-between; font-size: 0.66rem; color: var(--faint); margin-top: 0.15rem; padding: 0 0.1rem; }
+
+  /* individual device */
+  .devs { margin-top: 0.7rem; display: flex; flex-direction: column; gap: 0.7rem;
+    border-top: 1px solid var(--line); padding-top: 0.8rem; }
+  .dev { background: var(--surface-2); border: 1px solid var(--line); border-radius: 13px; padding: 0.7rem 0.75rem; }
+  .dev-head { display: flex; align-items: center; gap: 0.6rem; }
+  .dev-name { flex: 1; font-size: 0.95rem; font-weight: 550; }
+  .badge { font-size: 0.62rem; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 6px; padding: 0.05rem 0.35rem; }
+  .win { width: 36px; height: 36px; border: 2px solid var(--line-strong); border-radius: 7px; position: relative; overflow: hidden; background: var(--surface); flex: none; }
+  .win .shade { position: absolute; left: 0; right: 0; top: 0; transition: height 0.5s ease;
+    background-image: repeating-linear-gradient(color-mix(in oklab, var(--fg) 55%, transparent) 0 2px, transparent 2px 5px);
+    background-color: color-mix(in oklab, var(--fg) 24%, var(--surface)); }
+  .win.tilt .shade { background-image: repeating-linear-gradient(color-mix(in oklab, var(--fg) 55%, transparent) 0 3px, transparent 3px 6px); }
+
+  /* presets */
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.6rem; }
+  .preset { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 10px;
+    padding: 0.4rem 0.55rem; font: inherit; font-size: 0.82rem; color: var(--fg); cursor: pointer; text-align: left;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 0.4rem; }
+  .preset:hover { border-color: var(--accent); }
+  .preset .pv { font-size: 0.72rem; color: var(--muted); }
+  .preset.hot { background: var(--accent-soft); border-color: var(--accent); }
+  .preset.hot .pv { color: var(--accent-ink); }
+
+  .warn-line { font-size: 0.72rem; color: var(--warn); margin-top: 0.5rem; }
+  .hint { font-size: 0.82rem; color: var(--muted); background: var(--surface); border: 1px dashed var(--line-strong);
+    border-radius: 12px; padding: 0.9rem 1rem; }
+  .hint code { background: var(--surface-2); padding: 0.05rem 0.35rem; border-radius: 5px; font-size: 0.86em; }
+  .empty { color: var(--muted); padding: 2rem 1rem; text-align: center; }
+  .banner { font-size: 0.8rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 0.6rem 0.85rem; margin-top: 0.9rem; display: flex; gap: 0.5rem; align-items: center; }
+  .soon-pill { font-size: 0.7rem; color: var(--faint); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.5rem; }
+
+  /* ============================ climate / AC ============================ */
+  .ac-stats { display: flex; gap: 0.5rem; margin: 0.7rem 0 0.2rem; }
+  .ac-stat { flex: 1; background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; padding: 0.5rem 0.4rem; text-align: center; }
+  .ac-stat .v { font-size: 1.05rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .ac-stat .k { font-size: 0.6rem; letter-spacing: 0.6px; text-transform: uppercase; color: var(--faint); margin-top: 0.1rem; }
+  .ac-temp { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.2rem; }
+  .ac-temp .lab { flex: 1; font-size: 0.66rem; letter-spacing: 0.7px; text-transform: uppercase; color: var(--faint); }
+  .ac-temp .step { flex: none; width: 44px; height: 44px; font-size: 1.4rem; line-height: 1; }
+  .ac-temp .big { min-width: 4ch; text-align: center; font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .seg { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.2rem; }
+  .seg .chip { padding: 0.32rem 0.7rem; font-size: 0.82rem; }
+  .ac-foot { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.8rem; padding-top: 0.6rem;
+    border-top: 1px solid var(--line); font-size: 0.7rem; color: var(--faint); }
+  .ac-foot .spacer { flex: 1; }
+  .ac.off .ac-temp, .ac.off .seg { opacity: 0.5; }
+
+  footer { color: var(--faint); font-size: 0.72rem; text-align: center; padding: 1.5rem 0 2.5rem; }
 </style>
 </head>
 <body>
-<h1>electric-eye</h1>
-<div id="app" class="empty">Loading...</div>
+  <header class="app">
+    <div class="wrap">
+      <div class="head-row">
+        <span class="brand">
+          <span class="bunny" aria-hidden="true"><span class="ear l"></span><span class="ear r"></span><span class="head"></span></span>
+          <span class="name">electric<b>-eye</b></span>
+        </span>
+        <span class="spacer"></span>
+        <span class="conn" id="conn"><span class="dot"></span><span id="conn-text">connecting…</span></span>
+        <button class="iconbtn" id="theme" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+      </div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap" id="app"><div class="empty">Loading…</div></div>
+  </main>
+
+  <footer class="wrap">electric-eye · local control · <span id="foot-mode"></span></footer>
 
 <script>
-const app = document.getElementById("app");
-let groupsData = {};
-let devicesData = [];
-let stateData = {};
+/* =====================================================================
+   electric-eye — local web UI (vanilla, single file, drop-in)
+   Talks to the FastAPI backend; falls back to DEMO data when offline.
 
-const TYPE_LABELS = { 1: "roller", 3: "roller", 7: "tilt blind" };
+   Position convention (matches the original UI + hardware):
+     UI value `p` = % CLOSED (0 = fully open, 100 = fully closed).
+     The gateway/state reports % OPEN, so openPct = 100 - p.
+     The /set endpoints expect % OPEN, so we POST { percent: 100 - p }.
+   ===================================================================== */
 
-async function init() {
-  try {
-    const [gRes, dRes, sRes] = await Promise.all([
-      fetch("/api/groups"),
-      fetch("/api/devices"),
-      fetch("/api/state"),
-    ]);
-    if (!gRes.ok) throw new Error(`groups: HTTP ${gRes.status}`);
-    if (!dRes.ok) throw new Error(`devices: HTTP ${dRes.status}`);
-    groupsData = await gRes.json();
-    devicesData = await dRes.json();
-    if (sRes.ok) stateData = await sRes.json();
-    render();
-  } catch (e) {
-    app.className = "error";
-    app.textContent = `Failed to load: ${e.message}`;
-  }
+/* ---- config: adjust to match your devices.toml -------------------- */
+const FLOOR_GROUPS   = ["parter", "pietro"];          // whole-floor groups
+const SHUTTER_GROUPS = ["shutters", "rolety", "shutter"]; // optional: tag shutters here
+const BLIND_GROUPS   = ["blinds"];                    // optional: explicit blinds tag
+const TAG_GROUPS = [...SHUTTER_GROUPS, ...BLIND_GROUPS];
+const TYPE_LABEL = { 1: "roller", 3: "roller", 7: "tilt blind" };
+const POLL_MS = 6000;
+
+/* ---- climate / AC -------------------------------------------------- */
+/* Lists mirror the CLI (`ee ac mode|fan|swing`). Status reports the enum
+   NAME (upper-case: "COOL", "AUTO", "OFF"), so we match case-insensitively.
+   AC calls are slow (one TCP client at a time) so AC is NOT in the 6s poll —
+   it loads lazily when the Climate tab opens and refreshes per action. */
+const AC_MODES  = ["auto", "cool", "dry", "heat", "fan_only"];
+const AC_FANS   = ["auto", "silent", "low", "medium", "high", "max"];
+const AC_SWINGS = ["off", "vertical", "horizontal", "both"];
+const TEMP_MIN = 16, TEMP_MAX = 30;
+
+/* ---- state -------------------------------------------------------- */
+let DEMO = false;
+let groups = {};          // { name: [idStr,...] }
+let devices = [];         // [{id,name,type}]
+let stateData = {};       // { idStr: { value } }
+let nameOf = {}, typeOf = {};
+let filter = "all";       // all | blinds | shutters | climate
+const expanded = new Set();
+
+/* ---- AC state ----------------------------------------------------- */
+let acUnits = null;       // null = not loaded yet; [] = loaded (none); [{unit,name,ip}]
+let acStatus = {};        // unit -> status dict (or { error } on a failed fetch)
+let acUpdated = {};       // unit -> ms timestamp of last good read
+let acError = null;       // tab-level load error (e.g. no [ac.*] configured)
+let acLoading = false;    // guards against re-entrant loadAC()
+const acInflight = {};    // unit -> count of outstanding requests (busy + re-render guard)
+const acQueue = {};       // unit -> tail of a per-unit promise chain (serializes slow calls)
+
+/* ---- demo data (used only when the gateway isn't reachable) -------- */
+const DEMO_DEVICES = [
+  { id: 11, name: "South window", type: 1 },
+  { id: 12, name: "Garden door",  type: 1 },
+  { id: 13, name: "Terrace shutter", type: 3 },
+  { id: 21, name: "Desk window",  type: 1 },
+  { id: 22, name: "Roof skylight", type: 7 },
+];
+const DEMO_GROUPS = {
+  parter:  ["11", "12", "13", "21", "22"],
+  Salon:   ["11", "12", "13"],
+  Gabinet: ["21", "22"],
+  shutters: ["13"],
+};
+const DEMO_STATE = { "11": { value: "40%" }, "12": { value: "0%" }, "13": { value: "100%" },
+                     "21": { value: "60%" }, "22": { value: "25%" } };
+const DEMO_AC_UNITS = [{ unit: "gabinet", name: "net_ac_0E3E", ip: "192.168.68.61" }];
+const DEMO_AC_STATUS = { gabinet: {
+  online: true, power: true, mode: "COOL", fan_speed: "AUTO", swing_mode: "OFF",
+  target_temperature: 23, indoor_temperature: 25.5, outdoor_temperature: 31,
+} };
+
+/* ---- api ---------------------------------------------------------- */
+async function getJSON(url) {
+  const r = await fetch(url, { headers: { "Accept": "application/json" } });
+  if (!r.ok) throw new Error(url + " → HTTP " + r.status);
+  return r.json();
+}
+async function post(url, body) {
+  const opts = { method: "POST" };
+  if (body) { opts.headers = { "Content-Type": "application/json" }; opts.body = JSON.stringify(body); }
+  const r = await fetch(url, opts);
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || "HTTP " + r.status); }
+  return r.json();
 }
 
-function parsePercent(value) {
-  if (!value) return null;
-  const m = value.match(/^(\d+)%$/);
+async function loadAll() {
+  try {
+    const [g, d, s] = await Promise.all([getJSON("/api/groups"), getJSON("/api/devices"), getJSON("/api/state").catch(() => ({}))]);
+    groups = g; devices = Array.isArray(d) ? d : (d.devices || []); stateData = s || {};
+    DEMO = false;
+  } catch (err) {
+    console.warn("Falling back to demo data:", err.message);
+    DEMO = true;
+    groups = structuredClone(DEMO_GROUPS); devices = structuredClone(DEMO_DEVICES); stateData = structuredClone(DEMO_STATE);
+  }
+  nameOf = {}; typeOf = {};
+  for (const dv of devices) { nameOf[String(dv.id)] = dv.name; typeOf[String(dv.id)] = dv.type; }
+  setConn();
+}
+
+/* ---- helpers ------------------------------------------------------ */
+const lc = (s) => String(s).toLowerCase();
+function isFloor(name)  { return FLOOR_GROUPS.includes(lc(name)); }
+function isTag(name)    { return TAG_GROUPS.includes(lc(name)); }
+function shutterIds() {
+  const ids = new Set();
+  for (const [n, list] of Object.entries(groups)) if (SHUTTER_GROUPS.includes(lc(n))) list.forEach((i) => ids.add(String(i)));
+  return ids;
+}
+function deviceKind(id) {           // 'shutter' | 'blind'  (climate handled separately)
+  return shutterIds().has(String(id)) ? "shutter" : "blind";
+}
+function openPct(id) {              // from state → % open (null if unknown)
+  const v = (stateData[String(id)] || {}).value;
+  const m = v && String(v).match(/(\d+)\s*%/);
   return m ? Number(m[1]) : null;
 }
+function closedPct(id) { const o = openPct(id); return o == null ? null : 100 - o; }  // UI value
+function fmtPos(p) { if (p == null) return "position unknown"; if (p <= 0) return "open"; if (p >= 100) return "closed"; return p + "% closed"; }
 
-function apiToSlider(apiPercent) {
-  // API: 100% = fully open (up), 0% = fully closed (down)
-  // Slider: 0 = open (up), 100 = closed (down)
-  return 100 - apiPercent;
+function rooms() {  // groups that are real rooms (not floors, not tag-groups)
+  return Object.entries(groups).filter(([n]) => !isFloor(n) && !isTag(n));
 }
+function devicesIn(ids, kindFilter) {
+  return ids.map(String).map((id) => ({ id, name: nameOf[id] || ("#" + id), type: typeOf[id], kind: deviceKind(id) }))
+            .filter((d) => !kindFilter || d.kind === kindFilter);
+}
+function avgClosed(ids) {
+  const vals = ids.map((id) => closedPct(id)).filter((v) => v != null);
+  return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 50;
+}
+
+/* ---- control (real or simulated) ---------------------------------- */
+async function act(scope, key, action, p) {   // scope: 'device' | 'group' ; p = closedPct for 'set'
+  if (DEMO) { simulate(scope, key, action, p); return; }
+  const base = scope === "device" ? "/api/devices/" + key : "/api/groups/" + encodeURIComponent(key);
+  if (action === "set") return post(base + "/set", { percent: 100 - p });   // → % open
+  return post(base + "/" + action);
+}
+function simulate(scope, key, action, p) {
+  const ids = scope === "device" ? [String(key)] : (groups[key] || []).map(String);
+  for (const id of ids) {
+    let openTarget = action === "up" ? 100 : action === "down" ? 0 : action === "set" ? 100 - p : openPct(id);
+    if (openTarget == null) continue;
+    stateData[id] = { value: openTarget + "%" };
+  }
+}
+
+/* run an action against a set of device ids, choosing the most efficient path:
+   if the ids cover an entire room group → one group call; else per-device. */
+async function runOn(roomName, ids, action, p) {
+  const all = (groups[roomName] || []).map(String);
+  const target = ids.map(String);
+  const coversGroup = target.length === all.length && all.every((i) => target.includes(i));
+  if (coversGroup && !isTag(roomName)) return act("group", roomName, action, p);
+  for (const id of target) await act("device", id, action, p);  // sequential: one gateway op at a time
+}
+
+/* ---- AC: load + control ------------------------------------------- */
+/* The unit accepts one TCP client at a time and the backend opens a fresh
+   connection per request, so we serialize all calls to a given unit through
+   a per-unit promise chain. Across different units, parallel is fine. */
+function enqueueAc(unit, task) {
+  const prev = acQueue[unit] || Promise.resolve();
+  const next = prev.catch(() => {}).then(task);
+  acQueue[unit] = next;
+  return next;
+}
+
+async function refreshAcUnit(unit) {
+  if (DEMO) { acUpdated[unit] = Date.now(); return; }
+  try {
+    acStatus[unit] = await getJSON("/api/ac/" + encodeURIComponent(unit));
+    acUpdated[unit] = Date.now();
+  } catch (e) {
+    acStatus[unit] = { error: e.message || String(e) };
+  }
+}
+
+async function loadAC(force) {
+  if (acLoading) return;
+  if (acUnits !== null && !force) return;
+  acLoading = true; acError = null;
+  try {
+    if (DEMO) {
+      acUnits = structuredClone(DEMO_AC_UNITS);
+      acStatus = structuredClone(DEMO_AC_STATUS);
+      for (const u of acUnits) acUpdated[u.unit] = Date.now();
+    } else {
+      const units = await getJSON("/api/ac");           // 500 if no [ac.*] configured
+      acUnits = Array.isArray(units) ? units : [];
+      await Promise.all(acUnits.map((u) => refreshAcUnit(u.unit)));  // distinct units → parallel ok
+    }
+  } catch (e) {
+    acUnits = [];                                        // loaded, but empty/unavailable
+    acError = e.message || String(e);
+  } finally {
+    acLoading = false;
+    if (filter === "climate") render();
+  }
+}
+
+/* control verbs: each returns the unit's NEW state (apply() round-trips it),
+   so we never need a follow-up GET. In demo mode we mutate the cached state. */
+async function acPower(unit, on) {
+  if (DEMO) { acStatus[unit] = { ...acStatus[unit], power: on }; return acStatus[unit]; }
+  return post("/api/ac/" + encodeURIComponent(unit) + "/" + (on ? "on" : "off"));
+}
+async function acApply(unit, body) {
+  if (DEMO) {
+    const s = { ...acStatus[unit] };
+    if (body.temperature != null) s.target_temperature = body.temperature;
+    if (body.mode) s.mode = body.mode.toUpperCase();
+    if (body.fan_speed) s.fan_speed = String(body.fan_speed).toUpperCase();
+    if (body.swing) s.swing_mode = body.swing.toUpperCase();
+    return (acStatus[unit] = s);
+  }
+  return post("/api/ac/" + encodeURIComponent(unit) + "/set", body);
+}
+
+/* run an AC command: serialize per unit, show busy, fold the response back
+   into state, then re-render once the unit's queue has drained. */
+async function doAcAction(card, unit, fn) {
+  acInflight[unit] = (acInflight[unit] || 0) + 1;
+  card.classList.add("busy");
+  try {
+    const res = await enqueueAc(unit, fn);
+    if (res && !res.error) { acStatus[unit] = res; acUpdated[unit] = Date.now(); }
+    flash(card, "flash");
+  } catch (e) {
+    console.error(e); flash(card, "flash-err");
+  } finally {
+    acInflight[unit]--;
+    card.classList.remove("busy");
+    if (filter === "climate" && acInflight[unit] === 0) render();
+  }
+}
+
+/* ---- rendering ---------------------------------------------------- */
+const app = document.getElementById("app");
 
 function render() {
-  app.className = "";
+  renderChips();
   app.innerHTML = "";
 
-  const deviceNames = {};
-  const deviceTypes = {};
-  for (const d of devicesData) {
-    deviceNames[String(d.id)] = d.name;
-    deviceTypes[String(d.id)] = d.type;
+  if (filter === "climate") { renderClimate(); return; }
+  if (filter === "shutters" && shutterIds().size === 0) { app.appendChild(shutterHint()); return; }
+
+  const kindFilter = filter === "blinds" ? "blind" : filter === "shutters" ? "shutter" : null;
+
+  // floors (whole-floor quick controls)
+  const floors = Object.entries(groups).filter(([n]) => isFloor(n));
+  if (floors.length) {
+    app.appendChild(sectionTitle("Whole floor"));
+    const g = el("div", "grid");
+    floors.forEach(([n, ids]) => g.appendChild(floorCard(n, devicesIn(ids, kindFilter))));
+    app.appendChild(g);
   }
 
-  // Separate floors from rooms
-  const floors = ["parter", "pietro"];
-  const floorGroups = {};
-  const roomGroups = {};
-  for (const [name, ids] of Object.entries(groupsData)) {
-    if (floors.includes(name)) floorGroups[name] = ids;
-    else roomGroups[name] = ids;
+  // rooms
+  const rs = rooms().map(([n, ids]) => [n, devicesIn(ids, kindFilter)]).filter(([, d]) => d.length);
+  app.appendChild(sectionTitle(kindFilter ? (kindFilter === "shutter" ? "Shutters by room" : "Blinds by room") : "Rooms"));
+  if (!rs.length) { app.appendChild(el("div", "empty", "No matching devices.")); }
+  else {
+    const g = el("div", "grid");
+    rs.forEach(([n, d]) => g.appendChild(roomCard(n, d)));
+    app.appendChild(g);
   }
 
-  // Floors section
-  if (Object.keys(floorGroups).length) {
-    const h = document.createElement("h2");
-    h.textContent = "Floors";
-    app.appendChild(h);
-    for (const [name, ids] of Object.entries(floorGroups)) {
-      app.appendChild(makeGroupCard(name, ids, deviceNames, deviceTypes));
-    }
-  }
-
-  // Rooms section
-  const h = document.createElement("h2");
-  h.textContent = "Rooms";
-  app.appendChild(h);
-  for (const [name, ids] of Object.entries(roomGroups)) {
-    app.appendChild(makeGroupCard(name, ids, deviceNames, deviceTypes));
-  }
-
+  if (DEMO) app.appendChild(demoBanner());
 }
 
-function groupSliderPosition(ids) {
-  const percents = ids.map(id => parsePercent((stateData[id] || {}).value)).filter(v => v !== null);
-  if (!percents.length) return 50;
-  const avg = Math.round(percents.reduce((a, b) => a + b, 0) / percents.length);
-  return apiToSlider(avg);
+function renderChips() {
+  const chips = document.getElementById("chips");
+  const defs = [["all", "All"], ["blinds", "Blinds"], ["shutters", "Shutters"], ["climate", "Climate"]];
+  chips.innerHTML = "";
+  defs.forEach(([id, label]) => {
+    const b = el("button", "chip", label);
+    b.setAttribute("aria-selected", filter === id);
+    b.addEventListener("click", () => { filter = id; render(); });
+    chips.appendChild(b);
+  });
 }
 
-function makeGroupCard(name, ids, deviceNames, deviceTypes) {
-  const card = document.createElement("div");
-  card.className = "card";
-  card.dataset.group = name;
-  const label = name.replace(/-/g, " ");
-  const tooltip = ids.map(id => deviceNames[id] || `#${id}`).join("\n");
-  const sliderVal = groupSliderPosition(ids);
-  card.innerHTML = `
-    <div>
-      <span class="name">${escapeHtml(label)}</span>
-      <span class="count" title="${escapeHtml(tooltip)}">${ids.length} device${ids.length === 1 ? "" : "s"}</span>
-      <button class="expand-btn"><span class="arrow">&#9654;</span> devices</button>
-    </div>
-    <div class="controls">
-      <button data-action="up">UP</button>
-      <button data-action="stop">STOP</button>
-      <button data-action="down">DOWN</button>
-    </div>
-    <div class="slider-row">
-      <input type="range" min="0" max="100" value="${sliderVal}">
-      <span class="pct">${sliderVal}%</span>
-      <button data-action="set">Set</button>
-    </div>
-    <div class="group-devices"></div>
-  `;
-  const slider = card.querySelector("input[type=range]");
-  const pct = card.querySelector(".pct");
-  slider.addEventListener("input", () => pct.textContent = slider.value + "%");
-  card.querySelectorAll(".controls button, .slider-row button").forEach(btn => {
-    btn.addEventListener("click", () => onGroupAction(card, name, ids, btn.dataset.action, slider.value));
-  });
+function sectionTitle(t) { return el("div", "section-title", t); }
 
-  // Expand/collapse to show individual devices
-  const expandBtn = card.querySelector(".expand-btn");
-  const devContainer = card.querySelector(".group-devices");
-  let devicesPopulated = false;
-  expandBtn.addEventListener("click", () => {
-    expandBtn.classList.toggle("open");
-    devContainer.classList.toggle("open");
-    if (!devicesPopulated) {
-      devicesPopulated = true;
-      for (const id of ids) {
-        const d = devicesData.find(dev => String(dev.id) === String(id));
-        if (d) devContainer.appendChild(makeDeviceCard(d));
-      }
-    }
-  });
-
+function floorCard(name, devs) {
+  const card = el("div", "card room");
+  const ids = devs.map((d) => d.id);
+  const p = avgClosed(ids);
+  card.innerHTML = `<div class="room-head"><div>
+      <div class="room-name">${esc(cap(name))}</div>
+      <div class="room-sub">${devs.length} device${devs.length === 1 ? "" : "s"} · ${fmtPos(p)}</div>
+    </div></div>`;
+  card.appendChild(controlBlock(card, name, ids, p));
   return card;
 }
 
-function makeDeviceCard(d) {
-  const card = document.createElement("div");
-  card.className = "card";
-  card.dataset.id = d.id;
-  const typeLabel = TYPE_LABELS[d.type] || `type ${d.type}`;
-  const apiPct = parsePercent((stateData[String(d.id)] || {}).value);
-  const sliderVal = apiPct !== null ? apiToSlider(apiPct) : 50;
-  card.innerHTML = `
-    <div>
-      <span class="name">${escapeHtml(d.name)}</span>
-      <span class="id">#${d.id}</span>
-      <span class="type-badge">${escapeHtml(typeLabel)}</span>
-    </div>
-    <div class="controls">
-      <button data-action="up">UP</button>
-      <button data-action="stop">STOP</button>
-      <button data-action="down">DOWN</button>
-    </div>
-    <div class="slider-row">
-      <input type="range" min="0" max="100" value="${sliderVal}">
-      <span class="pct">${sliderVal}%</span>
-      <button data-action="set">Set</button>
-    </div>
-  `;
-  const slider = card.querySelector("input[type=range]");
-  const pct = card.querySelector(".pct");
-  slider.addEventListener("input", () => pct.textContent = slider.value + "%");
-  card.querySelectorAll("button").forEach(btn => {
-    btn.addEventListener("click", () => onDeviceAction(card, d.id, btn.dataset.action, slider.value));
-  });
+function roomCard(name, devs) {
+  const card = el("div", "card room");
+  const ids = devs.map((d) => d.id);
+  const p = avgClosed(ids);
+  const isOpen = expanded.has(name);
+  const head = el("div", "room-head");
+  head.innerHTML = `<div>
+      <div class="room-name">${esc(cap(name))}</div>
+      <div class="room-sub">${devs.length} device${devs.length === 1 ? "" : "s"} · ${fmtPos(p)}</div>
+    </div><span class="spacer"></span>`;
+  const exp = el("button", "expand");
+  exp.setAttribute("aria-expanded", isOpen);
+  exp.innerHTML = `<span class="car">›</span> devices`;
+  exp.addEventListener("click", () => { isOpen ? expanded.delete(name) : expanded.add(name); render(); });
+  head.appendChild(exp);
+  card.appendChild(head);
+
+  card.appendChild(el("div", "role", "Whole room"));
+  card.appendChild(controlBlock(card, name, ids, p));
+
+  if (isOpen) {
+    const wrap = el("div", "devs");
+    devs.forEach((d) => wrap.appendChild(deviceRow(d)));
+    card.appendChild(wrap);
+  }
   return card;
 }
 
-async function pollState() {
-  try {
-    const res = await fetch("/api/state");
-    if (res.ok) stateData = await res.json();
-  } catch (e) { /* ignore */ }
+/* whole-room / whole-floor control: buttons + slider */
+function controlBlock(card, roomName, ids, p) {
+  const box = el("div", "");
+  const row = el("div", "ctl-row");
+  row.append(
+    mkBtn("primary", "▲ Open", () => doAction(card, () => runOn(roomName, ids, "up"))),
+    mkBtn("", "■ Stop", () => doAction(card, () => runOn(roomName, ids, "stop"))),
+    mkBtn("", "▼ Close", () => doAction(card, () => runOn(roomName, ids, "down"))),
+  );
+  box.appendChild(row);
+  box.appendChild(sliderRow(p, (val) => doAction(card, () => runOn(roomName, ids, "set", val))));
+  return box;
 }
 
-function checkConfirmation(card, deviceIds, expectedAction, expectedPercent) {
-  setTimeout(async () => {
-    await pollState();
-    let mismatch = false;
-    if (expectedAction === "set") {
-      const expectedApi = 100 - Number(expectedPercent);
-      for (const id of deviceIds) {
-        const reported = parsePercent((stateData[String(id)] || {}).value);
-        if (reported !== null && Math.abs(reported - expectedApi) > 5) {
-          mismatch = true;
-          break;
-        }
-      }
-    }
-    // Update sliders to actual state
-    if (deviceIds.length === 1) {
-      const reported = parsePercent((stateData[String(deviceIds[0])] || {}).value);
-      if (reported !== null) {
-        const slider = card.querySelector("input[type=range]");
-        const pct = card.querySelector(".pct");
-        const sv = apiToSlider(reported);
-        slider.value = sv;
-        pct.textContent = sv + "%";
-      }
-    } else {
-      const sv = groupSliderPosition(deviceIds);
-      const slider = card.querySelector("input[type=range]");
-      const pct = card.querySelector(".pct");
-      slider.value = sv;
-      pct.textContent = sv + "%";
-    }
-    // Show warning if mismatch
-    card.querySelector(".warn-text")?.remove();
-    card.classList.remove("warn");
-    if (mismatch) {
-      card.classList.add("warn");
-      const w = document.createElement("div");
-      w.className = "warn-text";
-      w.textContent = "Position not confirmed — device may still be moving";
-      card.appendChild(w);
-      setTimeout(() => { card.classList.remove("warn"); w.remove(); }, 8000);
-    }
-  }, 4000);
+function deviceRow(d) {
+  const row = el("div", "dev");
+  const p = closedPct(d.id);
+  const head = el("div", "dev-head");
+  const win = el("div", "win" + (d.type === 7 ? " tilt" : ""));
+  const shade = el("div", "shade"); shade.style.height = (p == null ? 50 : p) + "%"; win.appendChild(shade);
+  head.append(win, el("div", "dev-name", esc(d.name)), el("span", "badge", TYPE_LABEL[d.type] || ("type " + d.type)));
+  row.appendChild(head);
+  row.appendChild(el("div", "room-sub", fmtPos(p)));
+
+  const ctl = el("div", "ctl-row"); ctl.style.marginTop = "0.55rem";
+  ctl.append(
+    mkBtn("primary", "▲", () => doAction(row, () => act("device", d.id, "up"), win)),
+    mkBtn("", "■", () => doAction(row, () => act("device", d.id, "stop"))),
+    mkBtn("", "▼", () => doAction(row, () => act("device", d.id, "down"), win)),
+  );
+  row.appendChild(ctl);
+  row.appendChild(sliderRow(p == null ? 50 : p, (val) => doAction(row, () => act("device", d.id, "set", val), win), shade));
+
+  const presets = el("div", "presets");
+  [["Open", 0], ["Almost dark", 97, true], ["Privacy", 50], ["Closed", 100]].forEach(([label, val, hot]) => {
+    const b = el("button", "preset" + (hot ? " hot" : ""));
+    b.innerHTML = `${label} <span class="pv">${val === 0 ? "open" : val === 100 ? "closed" : val + "%"}</span>`;
+    b.addEventListener("click", () => doAction(row, () => act("device", d.id, "set", val), win));
+    presets.appendChild(b);
+  });
+  row.appendChild(presets);
+  return row;
 }
 
-async function onGroupAction(card, name, ids, action, percent) {
-  setBusy(card, true);
+function sliderRow(p, onCommit, shadeEl) {
+  const wrap = el("div", "");
+  const r = el("div", "slider-row");
+  const input = el("input", ""); input.type = "range"; input.min = 0; input.max = 100; input.value = p;
+  input.style.setProperty("--p", p + "%");
+  const pct = el("span", "pct", p + "%");
+  input.addEventListener("input", () => {
+    pct.textContent = input.value + "%";
+    input.style.setProperty("--p", input.value + "%");
+    if (shadeEl) shadeEl.style.height = input.value + "%";
+  });
+  input.addEventListener("change", () => onCommit(Number(input.value)));
+  r.append(input, pct);
+  wrap.appendChild(r);
+  const ends = el("div", "ends"); ends.innerHTML = "<span>open</span><span>closed</span>";
+  wrap.appendChild(ends);
+  return wrap;
+}
+
+/* ---- action runner: busy + flash + confirm ------------------------ */
+async function doAction(card, fn) {
+  card.classList.add("busy");
   try {
-    let url = `/api/groups/${encodeURIComponent(name)}/${action}`;
-    let opts = { method: "POST" };
-    if (action === "set") {
-      opts.headers = { "Content-Type": "application/json" };
-      opts.body = JSON.stringify({ percent: 100 - Number(percent) });
-    }
-    const res = await fetch(url, opts);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || `HTTP ${res.status}`);
-    }
-    flash(card, "ok");
-    checkConfirmation(card, ids, action, percent);
+    await fn();
+    flash(card, "flash");
+    setTimeout(refreshSoon, 1200);
   } catch (e) {
-    console.error(e);
-    flash(card, "err");
+    console.error(e); flash(card, "flash-err");
   } finally {
-    setBusy(card, false);
+    card.classList.remove("busy");
   }
 }
+function flash(card, cls) { card.classList.add(cls); setTimeout(() => card.classList.remove(cls), 700); }
 
-async function onDeviceAction(card, id, action, percent) {
-  setBusy(card, true);
-  try {
-    let url = `/api/devices/${id}/${action}`;
-    let opts = { method: "POST" };
-    if (action === "set") {
-      opts.headers = { "Content-Type": "application/json" };
-      opts.body = JSON.stringify({ percent: 100 - Number(percent) });
-    }
-    const res = await fetch(url, opts);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || `HTTP ${res.status}`);
-    }
-    flash(card, "ok");
-    checkConfirmation(card, [id], action, percent);
-  } catch (e) {
-    console.error(e);
-    flash(card, "err");
-  } finally {
-    setBusy(card, false);
+/* ---- climate / AC tab --------------------------------------------- */
+function renderClimate() {
+  if (acUnits === null) {                 // first visit → kick off lazy load
+    loadAC();
+    app.appendChild(el("div", "empty", "Loading climate…"));
+    return;
   }
+  app.appendChild(sectionTitle("Air conditioning"));
+  if (acError) { app.appendChild(acHint(acError)); if (!acUnits.length) return; }
+  if (!acUnits.length) { app.appendChild(acHint(null)); return; }
+
+  const g = el("div", "grid");
+  acUnits.forEach((u) => g.appendChild(acCard(u)));
+  app.appendChild(g);
+  if (DEMO) app.appendChild(demoBanner());
 }
 
-function setBusy(card, busy) {
-  card.classList.toggle("busy", busy);
-  card.querySelectorAll("button").forEach(b => b.disabled = busy);
+function acHint(err) {
+  const d = el("div", "hint");
+  d.innerHTML = err
+    ? `<div style="font-weight:650;color:var(--fg);margin-bottom:.3rem">Climate unavailable</div>
+       Couldn't load AC units: <code>${esc(err)}</code>. Add an <code>[ac.&lt;name&gt;]</code> table to
+       <code>devices.toml</code> (with <code>ip</code>, <code>id</code>, <code>token</code>, <code>key</code> from
+       <code>msmart-ng discover</code>), then refresh.`
+    : `<div style="font-weight:650;color:var(--fg);margin-bottom:.3rem">No AC units configured</div>
+       Add an <code>[ac.&lt;name&gt;]</code> table to <code>devices.toml</code> to control your air conditioner here.`;
+  return d;
 }
 
-function flash(card, kind) {
-  const cls = `flash-${kind}`;
-  card.classList.add(cls);
-  setTimeout(() => card.classList.remove(cls), 800);
+function fmtTemp(n) { return n == null ? "—" : (Math.round(n * 10) % 10 ? n.toFixed(1) : Math.round(n)) + "°"; }
+function clampTemp(n) { return Math.min(TEMP_MAX, Math.max(TEMP_MIN, Math.round(n * 2) / 2)); }
+function agoLabel(ts) {
+  if (!ts) return "";
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 5) return "just now";
+  if (s < 90) return s + "s ago";
+  return Math.round(s / 60) + "m ago";
 }
 
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+function acCard(u) {
+  const card = el("div", "card room ac");
+  const s = acStatus[u.unit] || {};
+
+  if (s.error) {                          // per-unit fetch failed → error + retry
+    card.innerHTML = `<div class="room-head"><div>
+        <div class="room-name">${esc(cap(u.unit))}</div>
+        <div class="room-sub">${esc(u.name || "")} · ${esc(u.ip || "")}</div>
+      </div></div>
+      <div class="warn-line">Couldn't reach this unit: ${esc(s.error)}</div>`;
+    const foot = el("div", "ac-foot");
+    foot.append(el("span", "spacer"));
+    foot.appendChild(mkRefresh(card, u.unit));
+    card.appendChild(foot);
+    return card;
+  }
+
+  const on = !!s.power;
+  const offline = s.online === false;
+  if (!on) card.classList.add("off");
+
+  const head = el("div", "room-head");
+  head.innerHTML = `<div>
+      <div class="room-name">${esc(cap(u.unit))}</div>
+      <div class="room-sub">${esc(u.name || "")}${u.ip ? " · " + esc(u.ip) : ""}</div>
+    </div><span class="spacer"></span>
+    <span class="badge">${offline ? "offline" : on ? "on" : "off"}</span>`;
+  card.appendChild(head);
+
+  // sensor readouts (humidity/energy not reported by this hardware → omit)
+  const stats = el("div", "ac-stats");
+  stats.appendChild(acStat("indoor", s.indoor_temperature));
+  stats.appendChild(acStat("target", s.target_temperature));
+  if (s.outdoor_temperature != null) stats.appendChild(acStat("outdoor", s.outdoor_temperature));
+  card.appendChild(stats);
+
+  // power
+  const pow = el("div", "ctl-row"); pow.style.marginTop = "0.4rem";
+  pow.append(
+    mkBtn(on ? "primary" : "", "On", () => doAcAction(card, u.unit, () => acPower(u.unit, true))),
+    mkBtn(!on ? "primary" : "", "Off", () => doAcAction(card, u.unit, () => acPower(u.unit, false))),
+  );
+  card.appendChild(pow);
+
+  // target temperature (debounced commit so rapid taps = one apply)
+  card.appendChild(tempStepper(card, u.unit, s));
+
+  // mode / fan / swing segmented selectors
+  card.appendChild(el("div", "role", "Mode"));
+  card.appendChild(segRow(card, u.unit, AC_MODES, s.mode, (v) => acApply(u.unit, { mode: v })));
+  card.appendChild(el("div", "role", "Fan"));
+  card.appendChild(segRow(card, u.unit, AC_FANS, s.fan_speed, (v) => acApply(u.unit, { fan_speed: v })));
+  card.appendChild(el("div", "role", "Swing"));
+  card.appendChild(segRow(card, u.unit, AC_SWINGS, s.swing_mode, (v) => acApply(u.unit, { swing: v })));
+
+  const foot = el("div", "ac-foot");
+  foot.append(el("span", "", "updated " + agoLabel(acUpdated[u.unit])), el("span", "spacer"), mkRefresh(card, u.unit));
+  card.appendChild(foot);
+  return card;
 }
 
-init();
+function acStat(label, val) {
+  const d = el("div", "ac-stat");
+  d.append(el("div", "v", fmtTemp(val)), el("div", "k", label));
+  return d;
+}
+
+function mkRefresh(card, unit) {
+  const b = el("button", "expand", `<span class="car">↻</span> refresh`);
+  b.addEventListener("click", () => doAcAction(card, unit, () => (DEMO ? acStatus[unit] : getJSON("/api/ac/" + encodeURIComponent(unit)))));
+  return b;
+}
+
+/* segmented selector: highlight the chip matching the unit's current value
+   (status reports enum NAMEs, so compare upper-case). */
+function segRow(card, unit, options, current, apply) {
+  const row = el("div", "seg");
+  const cur = current != null ? String(current).toUpperCase() : null;
+  options.forEach((opt) => {
+    const b = el("button", "chip", opt.replace("_", " "));
+    b.setAttribute("aria-selected", opt.toUpperCase() === cur);
+    b.addEventListener("click", () => doAcAction(card, unit, () => apply(opt)));
+    row.appendChild(b);
+  });
+  return row;
+}
+
+function tempStepper(card, unit, s) {
+  const wrap = el("div", "ac-temp");
+  let val = clampTemp(s.target_temperature != null ? s.target_temperature : 22);
+  const out = el("div", "big", fmtTemp(val));
+  let timer = null;
+  const step = (d) => {
+    val = clampTemp(val + d);
+    s.target_temperature = val;                  // optimistic: survives a re-render
+    out.textContent = fmtTemp(val);
+    clearTimeout(timer);
+    timer = setTimeout(() => doAcAction(card, unit, () => acApply(unit, { temperature: val })), 700);
+  };
+  wrap.append(
+    el("div", "lab", "Target"),
+    mkBtn("step", "−", () => step(-0.5)),
+    out,
+    mkBtn("step", "+", () => step(0.5)),
+  );
+  return wrap;
+}
+function shutterHint() {
+  const d = el("div", "hint");
+  d.innerHTML = `<div style="font-weight:650;color:var(--fg);margin-bottom:.3rem">No shutters tagged yet</div>
+    The gateway reports blinds and shutters the same way, so electric-eye can't tell them apart automatically.
+    Tag them in <code>devices.toml</code> to enable this filter (and the future windy “blinds-only” rule):
+    <pre class="mono" style="margin:.6rem 0 0;white-space:pre-wrap;font-size:.8rem">[groups]
+shutters = [13, 27]   # device ids that are shutters</pre>`;
+  return d;
+}
+function demoBanner() {
+  const d = el("div", "banner");
+  d.innerHTML = `<span class="conn demo"><span class="dot"></span></span>
+    <span><b>Demo data</b> — not connected to a gateway. Served by your electric-eye app, this screen controls your real devices.</span>`;
+  return d;
+}
+
+/* ---- connection indicator + theme --------------------------------- */
+function setConn() {
+  const c = document.getElementById("conn"), t = document.getElementById("conn-text");
+  c.className = "conn" + (DEMO ? " demo" : "");
+  t.textContent = DEMO ? "demo data" : "connected · local";
+  document.getElementById("foot-mode").textContent = DEMO ? "demo data" : "live";
+}
+(function theme() {
+  const saved = localStorage.getItem("ee-theme");
+  if (saved) document.documentElement.dataset.theme = saved;
+  else if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.theme = "dark";
+  document.getElementById("theme").addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next; localStorage.setItem("ee-theme", next);
+  });
+})();
+
+/* ---- polling ------------------------------------------------------ */
+let pollTimer = null;
+async function refreshSoon() { try { await refreshState(); } catch {} }
+async function refreshState() {
+  if (DEMO) { refreshValues(); return; }
+  try { stateData = await getJSON("/api/state"); refreshValues(); } catch {}
+}
+function refreshValues() {
+  // update without rebuilding (so open panels & focus survive)
+  document.querySelectorAll("[data-room-sub]").forEach(() => {});
+  // simplest robust approach: re-render only if nothing is focused/being dragged
+  if (document.activeElement && document.activeElement.type === "range") return;
+  render();
+}
+
+/* ---- utils -------------------------------------------------------- */
+function el(tag, cls, html) { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; }
+function mkBtn(cls, label, on) { const b = el("button", "btn " + cls, label); b.addEventListener("click", on); return b; }
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function cap(s) { return String(s).replace(/[-_]/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()); }
+
+/* ---- boot --------------------------------------------------------- */
+(async function init() {
+  await loadAll();
+  render();
+  clearInterval(pollTimer);
+  pollTimer = setInterval(refreshState, POLL_MS);
+})();
 </script>
 </body>
 </html>
