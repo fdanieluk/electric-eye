@@ -8,7 +8,7 @@ import click
 from dotenv import load_dotenv
 
 from electric_eye.blinds import BlindsClient
-from electric_eye.config import load_ac, load_devices, load_groups
+from electric_eye.config import load_ac, load_devices, load_group_roles, load_groups
 
 load_dotenv()
 
@@ -103,9 +103,10 @@ def blinds_list():
 def blinds_rooms():
     """List all groups from devices.toml."""
     groups = load_groups()
+    roles = load_group_roles()
     device_names = load_devices()
     for group, ids in groups.items():
-        click.echo(f"{group}:")
+        click.echo(f"{group} ({roles.get(group, 'room')}):")
         for did in ids:
             name = device_names.get(did, "?")
             click.echo(f"  [{int(did):>2}] {name}")
