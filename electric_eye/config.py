@@ -1,22 +1,50 @@
-import os
 import tomllib
 from pathlib import Path
 
 
 def _resolve_path(path: str | Path | None = None) -> Path:
-    if path is not None:
-        return Path(path)
-    env = os.environ.get("DEVICES_TOML")
-    if env:
-        return Path(env)
-    return Path("devices.toml")
+    return Path(path) if path is not None else Path("devices.toml")
+
+
+VALID_GROUP_ROLES = ("room", "floor", "tag")
+_DEFAULT_ROLE = "room"
+
+
+def _group_devices(entry) -> list[str]:
+    """Device IDs from a [groups] entry: inline-table {devices=[...]} or a bare list."""
+    ids = entry["devices"] if isinstance(entry, dict) else entry
+    return [str(i) for i in ids]
 
 
 def load_groups(path: str | Path | None = None) -> dict[str, list[str]]:
-    """Load [groups] from devices.toml. Returns {group_name: [device_id_str, ...]}."""
+    """Load [groups] membership. Returns {group_name: [device_id_str, ...]}.
+
+    Role lives on each group too (see load_group_roles); this returns membership
+    only, so the shape is stable for callers that just resolve a group's devices.
+    """
     p = _resolve_path(path)
     data = tomllib.loads(p.read_text())
-    return {name: [str(i) for i in ids] for name, ids in data.get("groups", {}).items()}
+    return {name: _group_devices(entry) for name, entry in data.get("groups", {}).items()}
+
+
+def load_group_roles(path: str | Path | None = None) -> dict[str, str]:
+    """Load each group's declared role from [groups]. Returns {group_name: role}.
+
+    Inline-table entries declare `role` explicitly; a bare list (legacy form) or a
+    missing role defaults to "room". Raises ValueError on an unknown role.
+    """
+    p = _resolve_path(path)
+    data = tomllib.loads(p.read_text())
+    roles = {}
+    for name, entry in data.get("groups", {}).items():
+        role = entry.get("role", _DEFAULT_ROLE) if isinstance(entry, dict) else _DEFAULT_ROLE
+        if role not in VALID_GROUP_ROLES:
+            raise ValueError(
+                f"Group '{name}' has invalid role '{role}'; "
+                f"expected one of {', '.join(VALID_GROUP_ROLES)}."
+            )
+        roles[name] = role
+    return roles
 
 
 def load_devices(path: str | Path | None = None) -> dict[str, str]:

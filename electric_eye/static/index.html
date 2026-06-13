@@ -247,10 +247,11 @@
    ===================================================================== */
 
 /* ---- config: adjust to match your devices.toml -------------------- */
-const FLOOR_GROUPS   = ["parter", "pietro"];          // whole-floor groups
-const SHUTTER_GROUPS = ["shutters", "rolety", "shutter"]; // optional: tag shutters here
-const BLIND_GROUPS   = ["blinds"];                    // optional: explicit blinds tag
-const TAG_GROUPS = [...SHUTTER_GROUPS, ...BLIND_GROUPS];
+/* Group ROLE (room/floor/tag) is declared in devices.toml and read from the
+   API — no name lists here. SHUTTER_GROUPS is separate: it's shutter *kind*
+   detection (which devices are shutters) for the Shutters filter, still
+   name-based pending the device-type rework. */
+const SHUTTER_GROUPS = ["shutters", "rolety", "shutter"];
 const TYPE_LABEL = { 1: "roller", 3: "roller", 7: "tilt blind" };
 const POLL_MS = 6000;
 
@@ -265,7 +266,7 @@ const AC_SWINGS = ["off", "vertical", "horizontal", "both"];
 const TEMP_MIN = 16, TEMP_MAX = 30;
 
 /* ---- state -------------------------------------------------------- */
-let groups = {};          // { name: [idStr,...] }
+let groups = {};          // { name: { role, devices:[idStr,...] } }
 let devices = [];         // [{id,name,type}]
 let stateData = {};       // { idStr: { value } }
 let nameOf = {}, typeOf = {};
@@ -305,11 +306,12 @@ async function loadAll() {
 
 /* ---- helpers ------------------------------------------------------ */
 const lc = (s) => String(s).toLowerCase();
-function isFloor(name)  { return FLOOR_GROUPS.includes(lc(name)); }
-function isTag(name)    { return TAG_GROUPS.includes(lc(name)); }
+function roleOf(name)      { return (groups[name] && groups[name].role) || "room"; }
+function groupDevices(name) { return (groups[name] && groups[name].devices) || []; }
+function isTag(name)    { return roleOf(name) === "tag"; }
 function shutterIds() {
   const ids = new Set();
-  for (const [n, list] of Object.entries(groups)) if (SHUTTER_GROUPS.includes(lc(n))) list.forEach((i) => ids.add(String(i)));
+  for (const n of Object.keys(groups)) if (SHUTTER_GROUPS.includes(lc(n))) groupDevices(n).forEach((i) => ids.add(String(i)));
   return ids;
 }
 function deviceKind(id) {           // 'shutter' | 'blind'  (climate handled separately)
@@ -323,8 +325,8 @@ function openPct(id) {              // from state → % open (null if unknown)
 function closedPct(id) { const o = openPct(id); return o == null ? null : 100 - o; }  // UI value
 function fmtPos(p) { if (p == null) return "position unknown"; if (p <= 0) return "open"; if (p >= 100) return "closed"; return p + "% closed"; }
 
-function rooms() {  // groups that are real rooms (not floors, not tag-groups)
-  return Object.entries(groups).filter(([n]) => !isFloor(n) && !isTag(n));
+function rooms() {  // [name, deviceIds[]] for groups with the room role
+  return Object.keys(groups).filter((n) => roleOf(n) === "room").map((n) => [n, groupDevices(n)]);
 }
 function devicesIn(ids, kindFilter) {
   return ids.map(String).map((id) => ({ id, name: nameOf[id] || ("#" + id), type: typeOf[id], kind: deviceKind(id) }))
@@ -345,7 +347,7 @@ async function act(scope, key, action, p) {   // scope: 'device' | 'group' ; p =
 /* run an action against a set of device ids, choosing the most efficient path:
    if the ids cover an entire room group → one group call; else per-device. */
 async function runOn(roomName, ids, action, p) {
-  const all = (groups[roomName] || []).map(String);
+  const all = groupDevices(roomName).map(String);
   const target = ids.map(String);
   const coversGroup = target.length === all.length && all.every((i) => target.includes(i));
   if (coversGroup && !isTag(roomName)) return act("group", roomName, action, p);
@@ -429,11 +431,12 @@ function render() {
   const kindFilter = filter === "blinds" ? "blind" : filter === "shutters" ? "shutter" : null;
 
   // floors (whole-floor quick controls)
-  const floors = Object.entries(groups).filter(([n]) => isFloor(n));
+  const floors = Object.keys(groups).filter((n) => roleOf(n) === "floor")
+    .map((n) => [n, devicesIn(groupDevices(n), kindFilter)]).filter(([, d]) => d.length);
   if (floors.length) {
     app.appendChild(sectionTitle("Whole floor"));
     const g = el("div", "grid");
-    floors.forEach(([n, ids]) => g.appendChild(floorCard(n, devicesIn(ids, kindFilter))));
+    floors.forEach(([n, d]) => g.appendChild(groupCard(n, d, "floor")));
     app.appendChild(g);
   }
 
@@ -443,7 +446,7 @@ function render() {
   if (!rs.length) { app.appendChild(el("div", "empty", "No matching devices.")); }
   else {
     const g = el("div", "grid");
-    rs.forEach(([n, d]) => g.appendChild(roomCard(n, d)));
+    rs.forEach(([n, d]) => g.appendChild(groupCard(n, d, "room")));
     app.appendChild(g);
   }
 }
@@ -462,19 +465,10 @@ function renderChips() {
 
 function sectionTitle(t) { return el("div", "section-title", t); }
 
-function floorCard(name, devs) {
-  const card = el("div", "card room");
-  const ids = devs.map((d) => d.id);
-  const p = avgClosed(ids);
-  card.innerHTML = `<div class="room-head"><div>
-      <div class="room-name">${esc(cap(name))}</div>
-      <div class="room-sub">${devs.length} device${devs.length === 1 ? "" : "s"} · ${fmtPos(p)}</div>
-    </div></div>`;
-  card.appendChild(controlBlock(card, name, ids, p));
-  return card;
-}
-
-function roomCard(name, devs) {
+/* One card for any Group with members — floors and rooms alike. Both expand to
+   their devices; only the header label differs by role. (Tags aren't rendered as
+   cards; they drive filters.) */
+function groupCard(name, devs, role) {
   const card = el("div", "card room");
   const ids = devs.map((d) => d.id);
   const p = avgClosed(ids);
@@ -491,7 +485,7 @@ function roomCard(name, devs) {
   head.appendChild(exp);
   card.appendChild(head);
 
-  card.appendChild(el("div", "role", "Whole room"));
+  card.appendChild(el("div", "role", role === "floor" ? "Whole floor" : "Whole room"));
   card.appendChild(controlBlock(card, name, ids, p));
 
   if (isOpen) {
