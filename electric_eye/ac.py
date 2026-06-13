@@ -19,10 +19,6 @@ Mode = AirConditioner.OperationalMode
 Fan = AirConditioner.FanSpeed
 Swing = AirConditioner.SwingMode
 
-# Keys from msmart's to_dict() that are secrets/noise — never return them.
-_HIDDEN_STATE_KEYS = {"token", "key"}
-
-
 @dataclass
 class ACUnit:
     name: str
@@ -58,7 +54,7 @@ def _jsonable(value):
 
 
 def _clean(d: dict) -> dict:
-    return {k: _jsonable(v) for k, v in d.items() if k not in _HIDDEN_STATE_KEYS}
+    return {k: _jsonable(v) for k, v in d.items() if k not in {"token", "key"}}
 
 
 class ACClient:
@@ -135,9 +131,6 @@ class ACClient:
             return _clean(dev.to_dict())
 
     # --- convenience wrappers over apply() ---
-
-    async def set_power(self, name: str, on: bool) -> dict:
-        return await self.apply(name, power_state=on)
 
     async def set_temperature(self, name: str, celsius: float) -> dict:
         return await self.apply(name, target_temperature=celsius)
