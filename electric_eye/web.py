@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from electric_eye.blinds import BlindsClient
-from electric_eye.config import load_ac, load_groups
+from electric_eye.config import load_ac, load_group_roles, load_groups
 
 log = logging.getLogger(__name__)
 
@@ -150,7 +150,11 @@ async def _control_many(device_ids: list[str], value: str):
 
 @app.get("/api/groups")
 async def list_groups():
-    return load_groups()
+    """Groups with their declared role: {name: {role, devices}}."""
+    groups = load_groups()
+    roles = load_group_roles()
+    return {name: {"role": roles.get(name, "room"), "devices": devices}
+            for name, devices in groups.items()}
 
 
 @app.post("/api/groups/{group_name}/up")
