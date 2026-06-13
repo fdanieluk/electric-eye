@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from electric_eye.blinds import BlindsClient
-from electric_eye.config import load_groups
+from electric_eye.config import load_ac, load_groups
 
 log = logging.getLogger(__name__)
 
@@ -171,3 +171,94 @@ async def group_stop(group_name: str):
 @app.post("/api/groups/{group_name}/set")
 async def group_set(group_name: str, body: SetPositionBody):
     return await _control_many(_resolve_group(group_name), f"{body.percent}%")
+
+
+# --- AC (Vivax / Midea LAN) endpoints ---
+
+
+def get_ac_client():
+    from electric_eye.ac import ACClient
+
+    units = load_ac()
+    if not units:
+        raise HTTPException(status_code=500, detail="No AC units configured (add [ac.<name>] to devices.toml)")
+    return ACClient(units)
+
+
+def _require_ac_unit(client, unit: str) -> None:
+    if unit not in client.units:
+        raise HTTPException(status_code=404, detail=f"AC unit '{unit}' not found")
+
+
+async def _ac_call(coro):
+    try:
+        return await coro
+    except Exception as e:
+        log.exception("ac call failed")
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+class ACSetBody(BaseModel):
+    temperature: float | None = Field(default=None, ge=16, le=30)
+    mode: str | None = None
+    fan_speed: str | None = None
+    swing: str | None = None
+
+
+@app.get("/api/ac")
+async def list_ac():
+    client = get_ac_client()
+    return [{"unit": name, "name": u.name, "ip": u.ip} for name, u in client.units.items()]
+
+
+@app.get("/api/ac/{unit}")
+async def ac_status(unit: str):
+    client = get_ac_client()
+    _require_ac_unit(client, unit)
+    return await _ac_call(client.status(unit))
+
+
+@app.get("/api/ac/{unit}/capabilities")
+async def ac_capabilities(unit: str):
+    client = get_ac_client()
+    _require_ac_unit(client, unit)
+    return await _ac_call(client.capabilities(unit))
+
+
+@app.post("/api/ac/{unit}/on")
+async def ac_on(unit: str):
+    client = get_ac_client()
+    _require_ac_unit(client, unit)
+    return await _ac_call(client.set_power(unit, True))
+
+
+@app.post("/api/ac/{unit}/off")
+async def ac_off(unit: str):
+    client = get_ac_client()
+    _require_ac_unit(client, unit)
+    return await _ac_call(client.set_power(unit, False))
+
+
+@app.post("/api/ac/{unit}/set")
+async def ac_set(unit: str, body: ACSetBody):
+    from electric_eye.ac import parse_fan, parse_mode, parse_swing
+
+    client = get_ac_client()
+    _require_ac_unit(client, unit)
+
+    props: dict = {}
+    if body.temperature is not None:
+        props["target_temperature"] = body.temperature
+    try:
+        if body.mode is not None:
+            props["operational_mode"] = parse_mode(body.mode)
+        if body.fan_speed is not None:
+            props["fan_speed"] = parse_fan(body.fan_speed)
+        if body.swing is not None:
+            props["swing_mode"] = parse_swing(body.swing)
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid value: {e}")
+
+    if not props:
+        raise HTTPException(status_code=400, detail="No settings provided")
+    return await _ac_call(client.apply(unit, **props))
