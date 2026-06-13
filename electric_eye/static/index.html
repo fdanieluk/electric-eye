@@ -94,7 +94,6 @@
   .iconbtn:hover { border-color: var(--accent); }
   .conn { font-size: 0.74rem; color: var(--muted); display: inline-flex; align-items: center; gap: 0.4rem; }
   .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
-  .conn.demo .dot { background: var(--warn); }
   .conn.err .dot { background: var(--err); }
 
   /* filter chips */
@@ -239,7 +238,7 @@
 <script>
 /* =====================================================================
    electric-eye — local web UI (vanilla, single file, drop-in)
-   Talks to the FastAPI backend; falls back to DEMO data when offline.
+   Talks to the FastAPI backend.
 
    Position convention (matches the original UI + hardware):
      UI value `p` = % CLOSED (0 = fully open, 100 = fully closed).
@@ -266,7 +265,6 @@ const AC_SWINGS = ["off", "vertical", "horizontal", "both"];
 const TEMP_MIN = 16, TEMP_MAX = 30;
 
 /* ---- state -------------------------------------------------------- */
-let DEMO = false;
 let groups = {};          // { name: [idStr,...] }
 let devices = [];         // [{id,name,type}]
 let stateData = {};       // { idStr: { value } }
@@ -283,28 +281,6 @@ let acLoading = false;    // guards against re-entrant loadAC()
 const acInflight = {};    // unit -> count of outstanding requests (busy + re-render guard)
 const acQueue = {};       // unit -> tail of a per-unit promise chain (serializes slow calls)
 
-/* ---- demo data (used only when the gateway isn't reachable) -------- */
-const DEMO_DEVICES = [
-  { id: 11, name: "South window", type: 1 },
-  { id: 12, name: "Garden door",  type: 1 },
-  { id: 13, name: "Terrace shutter", type: 3 },
-  { id: 21, name: "Desk window",  type: 1 },
-  { id: 22, name: "Roof skylight", type: 7 },
-];
-const DEMO_GROUPS = {
-  parter:  ["11", "12", "13", "21", "22"],
-  Salon:   ["11", "12", "13"],
-  Gabinet: ["21", "22"],
-  shutters: ["13"],
-};
-const DEMO_STATE = { "11": { value: "40%" }, "12": { value: "0%" }, "13": { value: "100%" },
-                     "21": { value: "60%" }, "22": { value: "25%" } };
-const DEMO_AC_UNITS = [{ unit: "gabinet", name: "net_ac_0E3E", ip: "192.168.68.61" }];
-const DEMO_AC_STATUS = { gabinet: {
-  online: true, power: true, mode: "COOL", fan_speed: "AUTO", swing_mode: "OFF",
-  target_temperature: 23, indoor_temperature: 25.5, outdoor_temperature: 31,
-} };
-
 /* ---- api ---------------------------------------------------------- */
 async function getJSON(url) {
   const r = await fetch(url, { headers: { "Accept": "application/json" } });
@@ -320,15 +296,8 @@ async function post(url, body) {
 }
 
 async function loadAll() {
-  try {
-    const [g, d, s] = await Promise.all([getJSON("/api/groups"), getJSON("/api/devices"), getJSON("/api/state").catch(() => ({}))]);
-    groups = g; devices = Array.isArray(d) ? d : (d.devices || []); stateData = s || {};
-    DEMO = false;
-  } catch (err) {
-    console.warn("Falling back to demo data:", err.message);
-    DEMO = true;
-    groups = structuredClone(DEMO_GROUPS); devices = structuredClone(DEMO_DEVICES); stateData = structuredClone(DEMO_STATE);
-  }
+  const [g, d, s] = await Promise.all([getJSON("/api/groups"), getJSON("/api/devices"), getJSON("/api/state").catch(() => ({}))]);
+  groups = g; devices = Array.isArray(d) ? d : (d.devices || []); stateData = s || {};
   nameOf = {}; typeOf = {};
   for (const dv of devices) { nameOf[String(dv.id)] = dv.name; typeOf[String(dv.id)] = dv.type; }
   setConn();
@@ -366,20 +335,11 @@ function avgClosed(ids) {
   return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 50;
 }
 
-/* ---- control (real or simulated) ---------------------------------- */
+/* ---- control ------------------------------------------------------ */
 async function act(scope, key, action, p) {   // scope: 'device' | 'group' ; p = closedPct for 'set'
-  if (DEMO) { simulate(scope, key, action, p); return; }
   const base = scope === "device" ? "/api/devices/" + key : "/api/groups/" + encodeURIComponent(key);
   if (action === "set") return post(base + "/set", { percent: 100 - p });   // → % open
   return post(base + "/" + action);
-}
-function simulate(scope, key, action, p) {
-  const ids = scope === "device" ? [String(key)] : (groups[key] || []).map(String);
-  for (const id of ids) {
-    let openTarget = action === "up" ? 100 : action === "down" ? 0 : action === "set" ? 100 - p : openPct(id);
-    if (openTarget == null) continue;
-    stateData[id] = { value: openTarget + "%" };
-  }
 }
 
 /* run an action against a set of device ids, choosing the most efficient path:
@@ -404,7 +364,6 @@ function enqueueAc(unit, task) {
 }
 
 async function refreshAcUnit(unit) {
-  if (DEMO) { acUpdated[unit] = Date.now(); return; }
   try {
     acStatus[unit] = await getJSON("/api/ac/" + encodeURIComponent(unit));
     acUpdated[unit] = Date.now();
@@ -418,15 +377,9 @@ async function loadAC(force) {
   if (acUnits !== null && !force) return;
   acLoading = true; acError = null;
   try {
-    if (DEMO) {
-      acUnits = structuredClone(DEMO_AC_UNITS);
-      acStatus = structuredClone(DEMO_AC_STATUS);
-      for (const u of acUnits) acUpdated[u.unit] = Date.now();
-    } else {
-      const units = await getJSON("/api/ac");           // 500 if no [ac.*] configured
-      acUnits = Array.isArray(units) ? units : [];
-      await Promise.all(acUnits.map((u) => refreshAcUnit(u.unit)));  // distinct units → parallel ok
-    }
+    const units = await getJSON("/api/ac");           // 500 if no [ac.*] configured
+    acUnits = Array.isArray(units) ? units : [];
+    await Promise.all(acUnits.map((u) => refreshAcUnit(u.unit)));  // distinct units → parallel ok
   } catch (e) {
     acUnits = [];                                        // loaded, but empty/unavailable
     acError = e.message || String(e);
@@ -437,20 +390,11 @@ async function loadAC(force) {
 }
 
 /* control verbs: each returns the unit's NEW state (apply() round-trips it),
-   so we never need a follow-up GET. In demo mode we mutate the cached state. */
+   so we never need a follow-up GET. */
 async function acPower(unit, on) {
-  if (DEMO) { acStatus[unit] = { ...acStatus[unit], power: on }; return acStatus[unit]; }
   return post("/api/ac/" + encodeURIComponent(unit) + "/" + (on ? "on" : "off"));
 }
 async function acApply(unit, body) {
-  if (DEMO) {
-    const s = { ...acStatus[unit] };
-    if (body.temperature != null) s.target_temperature = body.temperature;
-    if (body.mode) s.mode = body.mode.toUpperCase();
-    if (body.fan_speed) s.fan_speed = String(body.fan_speed).toUpperCase();
-    if (body.swing) s.swing_mode = body.swing.toUpperCase();
-    return (acStatus[unit] = s);
-  }
   return post("/api/ac/" + encodeURIComponent(unit) + "/set", body);
 }
 
@@ -502,8 +446,6 @@ function render() {
     rs.forEach(([n, d]) => g.appendChild(roomCard(n, d)));
     app.appendChild(g);
   }
-
-  if (DEMO) app.appendChild(demoBanner());
 }
 
 function renderChips() {
@@ -652,7 +594,6 @@ function renderClimate() {
   const g = el("div", "grid");
   acUnits.forEach((u) => g.appendChild(acCard(u)));
   app.appendChild(g);
-  if (DEMO) app.appendChild(demoBanner());
 }
 
 function acHint(err) {
@@ -746,7 +687,7 @@ function acStat(label, val) {
 
 function mkRefresh(card, unit) {
   const b = el("button", "expand", `<span class="car">↻</span> refresh`);
-  b.addEventListener("click", () => doAcAction(card, unit, () => (DEMO ? acStatus[unit] : getJSON("/api/ac/" + encodeURIComponent(unit)))));
+  b.addEventListener("click", () => doAcAction(card, unit, () => getJSON("/api/ac/" + encodeURIComponent(unit))));
   return b;
 }
 
@@ -784,28 +725,21 @@ function tempStepper(card, unit, s) {
   );
   return wrap;
 }
+
 function shutterHint() {
   const d = el("div", "hint");
   d.innerHTML = `<div style="font-weight:650;color:var(--fg);margin-bottom:.3rem">No shutters tagged yet</div>
     The gateway reports blinds and shutters the same way, so electric-eye can't tell them apart automatically.
-    Tag them in <code>devices.toml</code> to enable this filter (and the future windy “blinds-only” rule):
+    Tag them in <code>devices.toml</code> to enable this filter (and the future windy "blinds-only" rule):
     <pre class="mono" style="margin:.6rem 0 0;white-space:pre-wrap;font-size:.8rem">[groups]
 shutters = [13, 27]   # device ids that are shutters</pre>`;
-  return d;
-}
-function demoBanner() {
-  const d = el("div", "banner");
-  d.innerHTML = `<span class="conn demo"><span class="dot"></span></span>
-    <span><b>Demo data</b> — not connected to a gateway. Served by your electric-eye app, this screen controls your real devices.</span>`;
   return d;
 }
 
 /* ---- connection indicator + theme --------------------------------- */
 function setConn() {
-  const c = document.getElementById("conn"), t = document.getElementById("conn-text");
-  c.className = "conn" + (DEMO ? " demo" : "");
-  t.textContent = DEMO ? "demo data" : "connected · local";
-  document.getElementById("foot-mode").textContent = DEMO ? "demo data" : "live";
+  document.getElementById("conn-text").textContent = "connected · local";
+  document.getElementById("foot-mode").textContent = "live";
 }
 (function theme() {
   const saved = localStorage.getItem("ee-theme");
@@ -821,7 +755,6 @@ function setConn() {
 let pollTimer = null;
 async function refreshSoon() { try { await refreshState(); } catch {} }
 async function refreshState() {
-  if (DEMO) { refreshValues(); return; }
   try { stateData = await getJSON("/api/state"); refreshValues(); } catch {}
 }
 function refreshValues() {
