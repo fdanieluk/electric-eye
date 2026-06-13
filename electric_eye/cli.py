@@ -386,34 +386,3 @@ def web(host, port, reload):
     import uvicorn
     click.echo(f"electric-eye web on http://{host}:{port}")
     uvicorn.run("electric_eye.web:app", host=host, port=port, reload=reload)
-
-
-@cli.command()
-@click.option("--listen-host", default="0.0.0.0", help="Address to listen on")
-@click.option("--listen-port", default=8884, type=int, help="Port to listen on")
-@click.option("--gateway-host", default=None, help="Gateway IP (default: MOBILUS_HOST from .env)")
-@click.option("--gateway-port", default=8884, type=int, help="Gateway port")
-def proxy(listen_host, listen_port, gateway_host, gateway_port):
-    """MITM proxy — intercept and decode Mobilus Dom app traffic.
-
-    Decrypts all MQTT messages between the mobile app and the gateway.
-    Point the mobile app at this machine's IP to capture traffic.
-    """
-    import asyncio
-    from electric_eye.proxy import run_proxy
-
-    setup_logging(verbose=True)
-
-    if gateway_host is None:
-        gateway_host = os.environ.get("MOBILUS_HOST")
-    password = os.environ.get("MOBILUS_PASSWORD")
-
-    if not gateway_host or not password:
-        click.echo("Need MOBILUS_HOST and MOBILUS_PASSWORD (from .env or --gateway-host)", err=True)
-        sys.exit(1)
-
-    click.echo(f"Proxy: {listen_host}:{listen_port} -> {gateway_host}:{gateway_port}")
-    click.echo("Point the Mobilus Dom app at this machine's IP to intercept traffic.")
-    click.echo("Press Ctrl+C to stop.\n")
-
-    asyncio.run(run_proxy(listen_host, listen_port, gateway_host, gateway_port, password))
