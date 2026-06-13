@@ -13,9 +13,6 @@ dependencies = [
     "msmart-ng>=2026.4.1",
 ]
 
-[project.optional-dependencies]
-mitm = ["scapy>=2.7.0"]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
