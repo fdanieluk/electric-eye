@@ -132,6 +132,9 @@ class ACClient:
 
     # --- convenience wrappers over apply() ---
 
+    async def set_power(self, name: str, on: bool) -> dict:
+        return await self.apply(name, power_state=on)
+
     async def set_temperature(self, name: str, celsius: float) -> dict:
         return await self.apply(name, target_temperature=celsius)
 
